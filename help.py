@@ -7,7 +7,7 @@ from config import config
 categories = {
     'description': {
         'music': 'Contient les commandes liées à l\'écoute musicale',
-        'manage': 'Contient les commandes de gestion du bot\nAccessible à tous les utilisateurs disposant de la permission "Gérer les messages"',
+        'manage': 'Contient les commandes de gestion du bot',
         'fun': 'Contient les commandes liées à l\'amusement'
     },
     'displayName': {
@@ -29,13 +29,15 @@ commandsList = {
             'remove': 'Supprime une musique de la liste d\'attente',
             'pause': 'Met en pause la lecture',
             'resume': 'Reprend la lecture',
-            'stop': 'Arrete la lecture et vide la liste d\'attente',
             'repeat': 'Change le mode de répétition',
+            'stop': 'Arrête la lecture',
+            'leave': 'Arrête la lecture, vide la liste d\'attente et se déconnecte',
             'goto': 'Se déplace à un autre musique de la liste'
         },
         'manage': {
-            'set-prefix': 'Défini un nouveau préfixe pour le robot (défaut $)',
-            'shutdown': 'Eteindre le bot'
+            'set-prefix': 'Défini un nouveau préfixe pour le robot (défaut $) (Seulement disponible aux utilisateurs disposant de la permission "Gérer les messages")',
+            'shutdown': 'Éteint le bot (Seulement disponible au ***créateur***)',
+            'ping': 'Retourne le ping du bot'
         },
         'fun': {
             'ah': 'quel plaisir'

@@ -3,6 +3,7 @@ import json
 
 CFGFILE = "config.json"
 DLDIR = "downloads/"
+SNDDIR = "../Sound/" #TODO Move to the config.json
 
 
 class Config():

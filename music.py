@@ -5,8 +5,9 @@ from discord.ext import commands
 from youtube import Youtube
 from spotify import Spotify
 from help import Help
-from config import config, DLDIR
+from config import config, DLDIR, SNDDIR
 import time
+import random
 
 Queues = {}
 
@@ -160,16 +161,43 @@ class Music(commands.Cog):
         authorVoice = context.author.voice
         voiceClient = context.voice_client
 
+        guild = context.guild.id
+
+
         if authorVoice is None:
-            return await context.send('Non connecté à un salon vocal')
+            return await context.send("Vous n'êtes pas connectés à un salon vocal")
         elif voiceClient is not None:
             await voiceClient.move_to(authorVoice.channel)
             # print("voice client not none")
         else:
             voiceClient = await authorVoice.channel.connect(timeout=600, reconnect=True)
+            
+            if guild not in Queues:
+                Queues[guild] = Queue(voiceClient, context.channel) 
+            
+                #Only add the startup sound if the queue doesn't exist
+                check, file = pickSoundFile("Startup")
+                if check:
+                    if file != "":
+                        entry = Entry(file, context.author, 0)
+                        entry.title = "Booting up..."
+                        entry.channel = "DJPatrice"
+                        entry.channel_url = "https://github.com/Kumkwats/my-discord-bot"
+                        entry.duration = 69420
+                        entry.album = None
+                        entry.thumbnail = "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/3ddaa372-c58c-4587-911e-1d625dff64dc/dapv26n-b138c16c-1cfc-45c3-9989-26fcd75d3060.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvM2RkYWEzNzItYzU4Yy00NTg3LTkxMWUtMWQ2MjVkZmY2NGRjXC9kYXB2MjZuLWIxMzhjMTZjLTFjZmMtNDVjMy05OTg5LTI2ZmNkNzVkMzA2MC5qcGcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.PnU42OFMHcio7nJ4a5Jsp8C-d6exHqd3vInU1682x1E"
+                        entry.url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+                        queue = Queues[guild]
+                        await queue.addEntry(entry)
+                    else:
+                        print("Aucun fichier trouvé")
+                else:
+                    print("dossier inexistant")
+                
             # print("voice client none")
 
-        guild = context.guild.id
+        
         if guild not in Queues:
             Queues[guild] = Queue(voiceClient, context.channel)
 
@@ -238,7 +266,7 @@ class Music(commands.Cog):
                         else:
                             try:
                                 filename = Youtube.getFilename(data['entries'][i])
-                                text = "(%d/%d) Téléchargement de %s..." % (i+1, len(data['entries']), data['entries'][i]['title'])
+                                text = "(%d/%d) Téléchargement de %s..." % (i+1, len(data['entries']), data['entries'][i]['title']) 
                                 await Youtube.downloadAudio(data['entries'][i]['webpage_url'], message, text, self.bot.loop),
                             except:
                                 await message.edit(content="Erreur lors du téléchargement de %s" % data['entries'][i]['title'])
@@ -421,15 +449,15 @@ class Music(commands.Cog):
             # go to end
 
             # remove entries
-            return await context.send("Non prit en charge pour le moment")
+            return await context.send("Non pris en charge pour le moment")
 
         if index < Queues[guild].size and index >= 0:
             entry = Queues[guild].getEntry(index)
+            if index == Queues[guild].cursor:
+                voiceClient.stop()
             Queues[guild].removeEntry(index)
             if index <= Queues[guild].cursor:
                 Queues[guild].cursor -= 1
-            if index == Queues[guild].cursor:
-                voiceClient.stop()
             if entry.filename in os.listdir(DLDIR):
                 os.remove(DLDIR + entry.filename)
             return await context.send('%s a bien été supprimé' % (entry.title))
@@ -474,20 +502,34 @@ class Music(commands.Cog):
         else:
             return await context.send('Aucune lecture en cours')
 
-    @commands.command(aliases=['arreter', 'stopper', 'quitter', 'leave', 'hutup', 'top'])
+    @commands.command(aliases=['arreter', 'stopper', 'hutup', 'top'])
     async def stop(self, context):
         voiceClient = context.voice_client
-        guild = context.guild.id
         if voiceClient is not None:
-            for entry in Queues[guild].content:
-                if entry.filename in os.listdir(DLDIR):
-                    os.remove(DLDIR + entry.filename)
-            Queues.pop(guild)
+            voiceClient.stop()
+            return await context.send("Ok j'arrête :(")
+        else:
+            return await context.send("Je suis pas connecté en fait !")
+
+    @commands.command(aliases=['quitter'])
+    async def leave(self, context):
+        voiceClient = context.voice_client
+        guild = context.guild.id
+        
+        if voiceClient is not None:
             voiceClient.stop()
             await voiceClient.disconnect()
-            return await context.send('Arrêté')
+            if guild in Queues:
+                for entry in Queues[guild].content:
+                    if entry.filename in os.listdir(DLDIR): #TODO implement waiting for process to stop using the file before trying to remove it
+                        os.remove(DLDIR + entry.filename)
+                Queues.pop(guild) # ATM, the file currently playing is kept in the file system but will be removed the next time
+            return await context.send('Ok bye!')
         else:
-            return await context.send('Aucune lecture en cours')
+            return await context.send('Je suis pas connecté en fait !')
+        
+
+    #TODO add difference between stop and leave(uses stop if is currently playing)
 
     @commands.command(aliases=['r', 'repeter'])
     async def repeat(self, context, mode: str = None):
@@ -509,7 +551,7 @@ class Music(commands.Cog):
 
         return await context.send('Le mode de répétition à été changé sur %s' % new_mode)
 
-    @commands.command(aliases=['g', 'go', ''])
+    @commands.command(aliases=['g', 'go', 'gt'])
     async def goto(self, context, index: int = None):
         guild = context.guild.id
         voiceClient = context.voice_client
@@ -529,3 +571,16 @@ class Music(commands.Cog):
             return  # await context.send('Direction la musique n°%d' % index)
         else:
             return await context.send('L\'index %d n\'existe pas' % index)
+        
+        
+def pickSoundFile(folderName):
+    fPath = SNDDIR + folderName
+    if os.path.isdir(fPath):
+        if len(os.listdir(fPath)) > 0:
+            rnd = random.randint(0, len(os.listdir(fPath))-1)
+            return True, "%s/%s" % (fPath, os.listdir(fPath)[rnd])
+        else:
+            return True, "" # Folder exist but no file found
+    else: 
+        return False, "" # Folder does not exist
+
