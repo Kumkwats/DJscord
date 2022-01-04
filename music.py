@@ -5,7 +5,7 @@ from discord.ext import commands
 from youtube import Youtube
 from spotify import Spotify
 from help import Help
-from config import config, DLDIR, SNDDIR
+from config import config
 import time
 import random
 
@@ -68,7 +68,7 @@ class Queue():
     async def startPlayback(self):
         if self.voice_client.is_connected() and not self.voice_client.is_playing():
             entry = self.content[self.cursor]
-            filename = DLDIR + entry.filename if entry.fileSize != 0 else entry.filename
+            filename = config.downloadDirectory + entry.filename if entry.fileSize != 0 else entry.filename
             player = discord.FFmpegPCMAudio(filename, options="-vn")
             self.voice_client.play(player, after=lambda e: self.nextEntry())
             self.starttime = time.time()
@@ -271,7 +271,7 @@ class Music(commands.Cog):
                             except:
                                 await message.edit(content="Erreur lors du téléchargement de %s" % data['entries'][i]['title'])
                                 continue
-                            fileSize = os.path.getsize(DLDIR + filename)
+                            fileSize = os.path.getsize(config.downloadDirectory + filename)
 
                         if voiceClient.is_connected():
                             entry = Entry(filename, applicant, fileSize, playlist)
@@ -295,7 +295,7 @@ class Music(commands.Cog):
                         await Youtube.downloadAudio(data['webpage_url'], message, text, self.bot.loop),
                     except:
                         return await message.edit(content="Erreur lors du téléchargement de %s" % data['title'])
-                    fileSize = os.path.getsize(DLDIR + filename)
+                    fileSize = os.path.getsize(config.downloadDirectory + filename)
 
                 if voiceClient.is_connected():
                     entry = Entry(filename, applicant, fileSize)
@@ -458,8 +458,8 @@ class Music(commands.Cog):
             Queues[guild].removeEntry(index)
             if index <= Queues[guild].cursor:
                 Queues[guild].cursor -= 1
-            if entry.filename in os.listdir(DLDIR):
-                os.remove(DLDIR + entry.filename)
+            if entry.filename in os.listdir(config.downloadDirectory):
+                os.remove(config.downloadDirectory + entry.filename)
             return await context.send('%s a bien été supprimé' % (entry.title))
         else:
             return await context.send('L\'index %d n\'existe pas' % (index))
@@ -506,30 +506,31 @@ class Music(commands.Cog):
     async def stop(self, context):
         voiceClient = context.voice_client
         if voiceClient is not None:
+            if voiceClient.is_playing() and context.author.voice is None:
+                return await context.send("Je suis en train de jouer de la musique là, viens me le dire en face !")
             voiceClient.stop()
-            return await context.send("Ok j'arrête :(")
+            return await context.send("Ok j'arrête de lire la musique :(")
         else:
             return await context.send("Je suis pas connecté en fait !")
 
-    @commands.command(aliases=['quitter'])
+    @commands.command(aliases=['quitter', 'deconnexion', 'deco'])
     async def leave(self, context):
         voiceClient = context.voice_client
         guild = context.guild.id
         
         if voiceClient is not None:
+            if voiceClient.is_playing() and context.author.voice is None:
+                return await context.send("Je suis en train de jouer de la musique là, viens me le dire en face !")
             voiceClient.stop()
             await voiceClient.disconnect()
             if guild in Queues:
                 for entry in Queues[guild].content:
-                    if entry.filename in os.listdir(DLDIR): #TODO implement waiting for process to stop using the file before trying to remove it
-                        os.remove(DLDIR + entry.filename)
-                Queues.pop(guild) # ATM, the file currently playing is kept in the file system but will be removed the next time
+                    if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
+                        os.remove(config.downloadDirectory + entry.filename) # ATM (if running on Windows), the file currently playing cannot be erased
+                Queues.pop(guild) 
             return await context.send('Ok bye!')
         else:
             return await context.send('Je suis pas connecté en fait !')
-        
-
-    #TODO add difference between stop and leave(uses stop if is currently playing)
 
     @commands.command(aliases=['r', 'repeter'])
     async def repeat(self, context, mode: str = None):
@@ -574,7 +575,7 @@ class Music(commands.Cog):
         
         
 def pickSoundFile(folderName):
-    fPath = SNDDIR + folderName
+    fPath = config.soundDirectory + folderName
     if os.path.isdir(fPath):
         if len(os.listdir(fPath)) > 0:
             rnd = random.randint(0, len(os.listdir(fPath))-1)
