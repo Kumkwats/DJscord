@@ -2,20 +2,21 @@ import os
 import discord
 from discord.ext import commands
 
-from config import config, DLDIR
+from config import config
 from help import Help
 from music import Music
 from manage import Manage
 from fun import Fun
+
 if config.FoxDotEnabled is True:
     from foxdot import Foxdot
 
 if __name__ == "__main__":
-    if os.path.isdir(DLDIR):
-        for f in os.listdir(DLDIR):
-            os.remove(DLDIR + f)
+    if os.path.isdir(config.downloadDirectory): # Preparing download folder
+        for f in os.listdir(config.downloadDirectory):
+            os.remove(config.downloadDirectory + f)
     else:
-        os.mkdir(DLDIR)
+        os.mkdir(config.downloadDirectory)
 
     bot = commands.Bot(command_prefix=lambda e, f: config.getPrefix(), help_command=None)
 

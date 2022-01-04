@@ -3,7 +3,7 @@ import discord
 import asyncio
 from discord.channel import VoiceChannel
 from discord.ext import commands
-from config import config, DLDIR
+from config import config
 
 
 class Manage(commands.Cog):
@@ -26,11 +26,12 @@ class Manage(commands.Cog):
         if isinstance(error, commands.MissingPermissions):
             return await context.send("Eh t'as pas les droits pour faire ça !")
 
-    @commands.command(aliases=['hutdown'])
+    @commands.command(aliases=['hutdown']) # TODO None type error quand pas dans le channel ?
     @commands.is_owner()
     async def shutdown(self, context):
         authorVoice = context.author.voice
         voiceClient = context.voice_client
+        
         if authorVoice is not None:
             if voiceClient is not None:
                 await voiceClient.move_to(authorVoice.channel)
@@ -44,10 +45,11 @@ class Manage(commands.Cog):
             voiceClient.play(player)
             while voiceClient.is_playing():
                 pass
+            await context.send("Bye bye")
             await voiceClient.disconnect()
-        await context.send("Bye bye")
-        for f in os.listdir(DLDIR):
-            os.remove(DLDIR + f)
+        await context.send("*User has left the channel*")
+        for f in os.listdir(config.downloadDirectory):
+            os.remove(config.downloadDirectory + f)
         exit(0)
 
     @shutdown.error
@@ -90,7 +92,7 @@ class Manage(commands.Cog):
             return await context.send("Something is wrong, I can feel it...")
 
     @commands.command()
-    async def ping(self, context):
+    async def ping(self, context): # Show latency from API and Voice channel if connected
         msg = "Pong!"
         msg += "\n`%1.0f ms` avec l'API" % (round(self.bot.latency*1000))
 
