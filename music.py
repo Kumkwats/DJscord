@@ -17,7 +17,7 @@ def time_format(seconds):
         seconds = int(seconds)
         h = seconds // 3600 % 24
         m = seconds % 3600 // 60
-        s = seconds % 3600 % 60
+        s = seconds % 60
         if h > 0:
             return '{:02d}:{:02d}:{:02d}'.format(h, m, s)
         else:
@@ -87,7 +87,6 @@ class Queue():
                 else:
                     self.cursor = self.cursor + 1
             elif self.repeat_mode == "playlist":
-                # A faire
                 def gotostart():
                     i = self.cursor-1
                     while self.content[i].playlist is not None and i >= 0:
@@ -97,13 +96,11 @@ class Queue():
                             break
                     self.cursor = i
 
-                # Fin de la playlist ??
                 current_entry = self.content[self.cursor]
                 if current_entry.playlist.id is not None:
                     if self.cursor < self.size-1:
                         if self.content[self.cursor+1].playlist is not None:
                             if self.content[self.cursor+1].playlist.id != current_entry.playlist.id:
-                                # GO au début
                                 gotostart()
                         else:
                             gotostart()
@@ -175,11 +172,11 @@ class Music(commands.Cog):
             if guild not in Queues:
                 Queues[guild] = Queue(voiceClient, context.channel) 
             
-                #Only add the startup sound if the queue doesn't exist
+                #Only add the startup sound if there is no queue
                 check, file = pickSoundFile("Startup")
                 if check:
                     if file != "":
-                        entry = Entry(file, context.author, 0)
+                        entry = Entry(file, context.author)
                         entry.title = "Booting up..."
                         entry.channel = "DJPatrice"
                         entry.channel_url = "https://github.com/Kumkwats/my-discord-bot"
@@ -191,9 +188,9 @@ class Music(commands.Cog):
                         queue = Queues[guild]
                         await queue.addEntry(entry)
                     else:
-                        print("Aucun fichier trouvé")
+                        print("Aucun fichier trouvé pour le startup")
                 else:
-                    print("dossier inexistant")
+                    print("dossier Sounds inexistant")
                 
             # print("voice client none")
 
@@ -259,7 +256,7 @@ class Music(commands.Cog):
                 playlist.buildMetadataYoutube(data)
                 queue_start = Queues[guild].size
                 for i in range(len(data['entries'])):
-                    if "is_live" in data['entries'][i]:
+                    if data['entries'][i] is not None:
                         if data['entries'][i]['is_live'] == True:
                             filename = data['entries'][i]['url']
                             fileSize = 0
@@ -276,7 +273,7 @@ class Music(commands.Cog):
                         if voiceClient.is_connected():
                             entry = Entry(filename, applicant, fileSize, playlist)
                             entry.buildMetadataYoutube(data['entries'][i])
-                            position = await queue.addEntry(entry, queue_start + i)
+                            position = await queue.addEntry(entry, queue_start + i) #TODO bug when stopping the bot while a playlist is currently added in the queue, the bot will resume by itself by adding the next track to the queue
                             if i == len(data['entries']) - 1:
                                 await message.edit(content="%s a été ajouté à la file d\'attente" % data['title'])
                             else:
@@ -359,7 +356,7 @@ class Music(commands.Cog):
             return await context.send('L\'index %d n\'existe pas' % (index))
 
     @commands.command(aliases=['q', 'file'])
-    async def queue(self, context):
+    async def queue(self, context, page: int = None):
         guild = context.guild.id
         if guild not in Queues:
             return await context.send('Aucune liste d\'attente')
@@ -368,16 +365,38 @@ class Music(commands.Cog):
         totalSize = 0
         current_playlist = ""
         list = ""
-        for i in range(Queues[guild].size):
+        
+        #TODO add this to the config file
+        printSize = 20
+        printMin, printMax = 0, Queues[guild].size
+        
+        if page is None:
+            printMin = max(Queues[guild].cursor - printSize // 2, 0)
+            printMax = min(printMin + printSize, Queues[guild].size)
+            
+        else:
+            if (page - 1) * printSize > Queues[guild].size or page < 1:
+                return await context.send('Index de page invalide')
+            
+            printMin = (page - 1)*printSize
+            printMax = min(printMin + printSize, Queues[guild].size)
+        
+        if printMin == 0:
+            list += "==== Début de la file\n"
+        else:
+            list += "⠀⠀⠀⠀…\n"
+            
+        for i in range(printMin, printMax):
             entry = Queues[guild].content[i]
             if entry.playlist is not None:
                 tab = "⠀⠀⠀⠀"
                 if entry.playlist.id != current_playlist:
                     current_playlist = entry.playlist.id
                     if Queues[guild].repeat_mode == "playlist":
-                        list += "⟳⠀ Playlist : %s\n" % entry.playlist.title
+                        list += "⟳⠀"
                     else:
-                        list += "⠀⠀ Playlist : %s\n" % entry.playlist.title
+                        list += "⠀⠀"
+                    list += " Playlist : %s\n" % entry.playlist.title
             else:
                 tab = ""
                 current_playlist = ""
@@ -391,7 +410,11 @@ class Music(commands.Cog):
                     indicator = "→⠀"
 
             list += "%s%s%d: %s - %s - %.2fMo\n" % (tab, indicator, i, entry.title, time_format(entry.duration), entry.fileSize/1000000)
-
+        if printMax == Queues[guild].size:
+            list += "==== Fin de la file"
+        else:
+            list += "⠀⠀⠀⠀…"
+        
         repeat_text = {
             "none": "Aucun",
             "entry": "Musique en cours",
@@ -403,9 +426,11 @@ class Music(commands.Cog):
             description=list,
             color=0x565493
         )
-        embed.set_author(name="Liste de lecture", icon_url="https://i.imgur.com/C66eNWB.jpg")
-        embed.set_footer(text="Nombre d'entrées : %d | Mode de répétition : %s\nDurée totale : %s | Taille totale : %.2fMo" %
-                         (Queues[guild].size, repeat_text[Queues[guild].repeat_mode], time_format(totalDuration), totalSize/1000000))
+        footerText = "Nombre d'entrées : %d | Mode de répétition : %s\nDurée totale : %s | Taille totale : %.2fMo" % (Queues[guild].size, repeat_text[Queues[guild].repeat_mode], time_format(totalDuration), totalSize/1000000)
+        if page is not None:
+            footerText += "\nPage %d/%d" % (page, ((Queues[guild].size - 1) // printSize) + 1)
+        embed.set_author(name = "Liste de lecture", icon_url = "https://i.imgur.com/C66eNWB.jpg")
+        embed.set_footer(text = footerText)
 
         return await context.send(embed=embed)
 

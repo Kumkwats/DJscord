@@ -4,7 +4,7 @@ import asyncio
 from discord.channel import VoiceChannel
 from discord.ext import commands
 from config import config
-
+from music import Queues
 
 class Manage(commands.Cog):
     def __init__(self, bot):
@@ -39,8 +39,9 @@ class Manage(commands.Cog):
                 voiceClient = await authorVoice.channel.connect(timeout=600, reconnect=True)
         if voiceClient is not None:
             if voiceClient.is_playing():
+                Queues.clear()
                 voiceClient.stop()
-            player = discord.FFmpegPCMAudio(os.path.dirname(os.path.realpath(__file__)) + "/shutdown.webm", options="-vn")
+            player = discord.FFmpegPCMAudio(os.path.dirname(os.path.realpath(__file__)) + "/shutdown.webm", options="-vn") #TODO allow to use custom the sounds, similar to startup sounds
             await context.send("Shuting down DJPatrice XP…")
             voiceClient.play(player)
             while voiceClient.is_playing():
