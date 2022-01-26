@@ -60,6 +60,7 @@ class Queue():
         self.size = 0
         self.cursor = 0
         self.starttime = 0
+        self.pausetime = 0
         self.voice_client = voice_client
         self.text_channel = text_channel
         self.repeat_mode = repeat_mode  # none, entry, playlist, all
@@ -110,7 +111,7 @@ class Queue():
                 self.cursor = self.cursor + 1
 
         self.repeat_bypass = False
-        print("next")
+        print("next entry")
         if self.cursor < self.size:
             coro = self.startPlayback()
             fut = asyncio.run_coroutine_threadsafe(coro, self.voice_client.loop)
@@ -180,7 +181,7 @@ class Music(commands.Cog):
                         entry.title = "Booting up..."
                         entry.channel = "DJPatrice"
                         entry.channel_url = "https://github.com/Kumkwats/my-discord-bot"
-                        entry.duration = 69420
+                        entry.duration = 0
                         entry.album = None
                         entry.thumbnail = "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/3ddaa372-c58c-4587-911e-1d625dff64dc/dapv26n-b138c16c-1cfc-45c3-9989-26fcd75d3060.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvM2RkYWEzNzItYzU4Yy00NTg3LTkxMWUtMWQ2MjVkZmY2NGRjXC9kYXB2MjZuLWIxMzhjMTZjLTFjZmMtNDVjMy05OTg5LTI2ZmNkNzVkMzA2MC5qcGcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.PnU42OFMHcio7nJ4a5Jsp8C-d6exHqd3vInU1682x1E"
                         entry.url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
@@ -323,11 +324,18 @@ class Music(commands.Cog):
 
             content = "Chaîne : [%s](%s)\n" % (entry.channel, entry.channel_url)
             if Queues[guild].cursor == index:
-                current = time_format(int(time.time() - Queues[guild].starttime))
-                if entry.duration == 0:
-                    content += "Progression : %s\n" % (current)
+                pause = ""
+                if voiceClient.is_paused():
+                    current = time_format(int(Queues[guild].pausetime - Queues[guild].starttime))
+                    pause = "[paused]"
                 else:
-                    content += "Progression : %s / %s\n" % (current, time_format(entry.duration))
+                    current = time_format(int(time.time() - Queues[guild].starttime))
+
+                if entry.duration == 0:
+                    content += "Progression : %s %s\n" % (current, pause)
+                else:
+                    content += "Progression : %s / %s %s\n" % (current, time_format(entry.duration), pause)
+
             if entry.album is not None:
                 content += "Album : %s\n" % (entry.album)
             if entry.playlist is not None:
@@ -506,9 +514,11 @@ class Music(commands.Cog):
     @commands.command(aliases=['pauser', 'suspendre', 'uspendre', 'halte'])
     async def pause(self, context):
         voiceClient = context.voice_client
+        guild = context.guild.id
         if voiceClient is not None:
             if voiceClient.is_playing():
                 voiceClient.pause()
+                Queues[guild].pausetime = time.time()
                 return await context.send('Mis en pause')
             else:
                 return await context.send('Déjà en pause')
@@ -518,9 +528,12 @@ class Music(commands.Cog):
     @commands.command(aliases=['reprendre'])
     async def resume(self, context):
         voiceClient = context.voice_client
+        guild = context.guild.id
         if voiceClient is not None:
             if voiceClient.is_paused():
                 voiceClient.resume()
+                Queues[guild].starttime = time.time() - (Queues[guild].pausetime - Queues[guild].starttime) # Setting starttime to the correct time to ensure that the time elapsed on the entry is correct when resuming
+                Queues[guild].pausetime = 0
                 return await context.send('Reprise de la lecture')
             else:
                 return await context.send('Déjà en lecture')
@@ -551,7 +564,7 @@ class Music(commands.Cog):
             if guild in Queues:
                 for entry in Queues[guild].content:
                     if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
-                        os.remove(config.downloadDirectory + entry.filename) # ATM (if running on Windows), the file currently playing cannot be erased
+                        os.remove(config.downloadDirectory + entry.filename) # ATM (if running on Windows), the file currently playing will not be erased
                 Queues.pop(guild) 
             return await context.send('Ok bye!')
         else:

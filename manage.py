@@ -4,7 +4,7 @@ import asyncio
 from discord.channel import VoiceChannel
 from discord.ext import commands
 from config import config
-from music import Queues
+from music import Queues, pickSoundFile
 
 class Manage(commands.Cog):
     def __init__(self, bot):
@@ -41,9 +41,19 @@ class Manage(commands.Cog):
             if voiceClient.is_playing():
                 Queues.clear()
                 voiceClient.stop()
-            player = discord.FFmpegPCMAudio(os.path.dirname(os.path.realpath(__file__)) + "/shutdown.webm", options="-vn") #TODO allow to use custom the sounds, similar to startup sounds
+            #player = discord.FFmpegPCMAudio(os.path.dirname(os.path.realpath(__file__)) + "/shutdown.webm", options="-vn") #TODO allow to use custom the sounds, similar to startup sounds
             await context.send("Shuting down DJPatrice XP…")
-            voiceClient.play(player)
+
+            check, file = pickSoundFile("Shutdown")
+            if check:
+                if file != "":
+                    player = discord.FFmpegPCMAudio(file, options="-vn")
+                    voiceClient.play(player)
+                else:
+                    print("Aucun fichier pour le shutdown")
+            else:
+                print("dossier sounds inexistant")
+            
             while voiceClient.is_playing():
                 pass
             await context.send("Bye bye")
