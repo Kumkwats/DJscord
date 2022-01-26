@@ -2,8 +2,8 @@ import os
 import json
 
 CFGFILE = "config.json"
-DLDIR = "downloads/"
-SNDDIR = "../Sound/" #TODO Move to the config.json
+#DLDIR = "downloads/"
+#SNDDIR = "../Sound/" #TODO Move to the config.json
 
 
 class Config():
@@ -20,13 +20,13 @@ class Config():
             if 'download-director' in self.conf:
                 self.downloadDirectory = self.conf['download-directory']
             
-            print("Downloaded files at: " + self.downloadDirectory)
+            print("\tDownloaded files at: " + self.downloadDirectory)
 
             self.soundDirectory = "sounds/" # default sounds directory
             if 'sound-directory' in self.conf:
                 self.soundDirectory = self.conf['sound-directory']
             
-            print("Other sound files at: " + self.soundDirectory)
+            print("\tOther sound files at: " + self.soundDirectory)
 
             self.spotifyEnabled = False
             if 'spotify-client-id' and 'spotify-client-secret' in self.conf:

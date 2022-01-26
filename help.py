@@ -6,9 +6,9 @@ from config import config
 
 categories = {
     'description': {
-        'music': 'Contient les commandes liées à l\'écoute musicale',
-        'manage': 'Contient les commandes de gestion du bot',
-        'fun': 'Contient les commandes liées à l\'amusement'
+        'music': 'Commandes liées à l\'écoute musicale',
+        'manage': 'Commandes de gestion du bot',
+        'fun': 'Commandes liées à l\'amusement'
     },
     'displayName': {
         'music': 'Musique',

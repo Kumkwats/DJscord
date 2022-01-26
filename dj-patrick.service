@@ -10,7 +10,7 @@ User=dj-patrick
 Group=dj-patrick
 
 WorkingDirectory=/var/lib/dj-patrick
-ExecStart=/usr/bin/python3 /opt/dj-patrick
+ExecStart=/usr/bin/python3 -u /opt/dj-patrick
 
 [Install]
 WantedBy=multi-user.target

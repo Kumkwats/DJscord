@@ -2,14 +2,14 @@ from youtubesearchpython.__future__ import VideosSearch
 import yt_dlp
 import asyncio
 import time
-from config import DLDIR
+from config import config
 
 # Suppress noise about console usage from errors
 yt_dlp.utils.bug_reports_message = lambda: ''
 
 ydl_opts = {
     'format': 'bestaudio/best',
-    'outtmpl': DLDIR + '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'outtmpl': config.downloadDirectory + '%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
     'noplaylist': True,
     'nocheckcertificate': True,
@@ -49,7 +49,7 @@ class Youtube():
         return data
 
     def getFilename(data):
-        filename = ydl.prepare_filename(data)[len(DLDIR):]
+        filename = ydl.prepare_filename(data)[len(config.downloadDirectory):]
         print(filename)
         return filename
 
