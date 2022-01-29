@@ -48,7 +48,7 @@ commandsList = {
             'play': '<lien Youtube / lien http / recherche Youtube>',
             'info': '<position>',
             'move': '<position actuelle> <nouvelle position>',
-            'remove': '<position>',
+            'remove': '<position de l\'entrée / de début> *(optionel)<position de fin>*',
             'repeat': '<mode>\nExemples : none, entry, all, playlist',
             'goto': '<position>'
         },

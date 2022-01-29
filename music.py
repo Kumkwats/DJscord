@@ -462,40 +462,53 @@ class Music(commands.Cog):
             return await context.send('Une des deux positions est invalide')
 
     @commands.command(aliases=['rm', 'supprimer', 'enlever'])
-    async def remove(self, context, option: str = None, index: int = None):
+    async def remove(self, context, idx1: str = None, idx2: str = None):
         guild = context.guild.id
         voiceClient = context.voice_client
         if guild not in Queues:
             return await context.send('Aucune liste d\'attente')
 
-        if index is None and option is None:
-            return await context.send(embed=Help.get(context, 'music', 'remove'))
-
-        if index is None and option.isdigit():
-            index = int(option)
-        elif index is not None:
-            pass
+        if idx1.isdigit():
+            idx1 = int(idx1)
         else:
             return await context.send(embed=Help.get(context, 'music', 'remove'))
-
-        if option == "-r":
-            # go to end
-
-            # remove entries
-            return await context.send("Non pris en charge pour le moment")
-
-        if index < Queues[guild].size and index >= 0:
-            entry = Queues[guild].getEntry(index)
-            if index == Queues[guild].cursor:
+                    
+        if idx1 >= Queues[guild].size or idx1 < 0:
+            return await context.send('L\'index 1 (%d) n\'existe pas dans la queue' % (idx1))
+        
+        if idx2 is None: # remove one entry
+            entry = Queues[guild].getEntry(idx1)
+            if idx1 == Queues[guild].cursor:
                 voiceClient.stop()
-            Queues[guild].removeEntry(index)
-            if index <= Queues[guild].cursor:
+            Queues[guild].removeEntry(idx1)
+            if idx1 <= Queues[guild].cursor:
                 Queues[guild].cursor -= 1
             if entry.filename in os.listdir(config.downloadDirectory):
                 os.remove(config.downloadDirectory + entry.filename)
             return await context.send('%s a bien été supprimé' % (entry.title))
-        else:
-            return await context.send('L\'index %d n\'existe pas' % (index))
+        else: # remove multiple entries
+            if idx2.isdigit():
+                idx2 = int(idx2) + 1
+            elif idx2 == "-":
+                idx2 = Queues[guild].size
+            else:
+                return await context.send(embed=Help.get(context, 'music', 'remove'))
+
+            oldSize = Queues[guild].size
+            if idx2 > oldSize or idx2 < 0:
+                return await context.send('L\'index 2 (%d) n\'existe pas dans la queue' % (idx1))
+            if idx1 > (idx2 - 1):
+                return await context.send("Attention à l'ordre des index !")
+            if idx1 <= Queues[guild].cursor <= idx2 - 1:
+                voiceClient.stop()
+            for i in range(idx2 - idx1):
+                entry = Queues[guild].getEntry(idx1)
+                Queues[guild].removeEntry(idx1)
+                if idx1 <= Queues[guild].cursor:
+                    Queues[guild].cursor -= 1
+                if entry.filename in os.listdir(config.downloadDirectory):
+                    os.remove(config.downloadDirectory + entry.filename)
+            return await context.send("Les entrées commençant à %d jusqu'à %s ont bien été supprimés" % (idx1, "la fin de la liste" if idx2 == oldSize else str(idx2 - 1)))
 
     @commands.command(aliases=['s', 'passer'])
     async def skip(self, context):

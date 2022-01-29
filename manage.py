@@ -41,7 +41,6 @@ class Manage(commands.Cog):
             if voiceClient.is_playing():
                 Queues.clear()
                 voiceClient.stop()
-            #player = discord.FFmpegPCMAudio(os.path.dirname(os.path.realpath(__file__)) + "/shutdown.webm", options="-vn") #TODO allow to use custom the sounds, similar to startup sounds
             await context.send("Shuting down DJPatrice XP…")
 
             check, file = pickSoundFile("Shutdown")
