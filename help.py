@@ -63,80 +63,80 @@ class Help(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def get(context, category, command):
+    def get(self, context, category, command):
         PREFIX = config.getPrefix()
         title = "Commande %s%s" % (PREFIX, command)
 
         embed = discord.Embed(
-            title=title,
-            description=commandsList['description'][category][command],
-            color=0x565493
+            title = title,
+            description = commandsList['description'][category][command],
+            color = 0x565493
         )
         embed.set_author(
-            name="Aide",
-            icon_url="https://i.imgur.com/C66eNWB.jpg"
+            name = "Aide",
+            icon_url = self.bot.user.display_avatar.url
         )
 
         if command in commandsList['usage'][category]:
             embed.add_field(
-                name="Utilisation",
-                value="%s%s %s" % (PREFIX, command, commandsList['usage'][category][command]),
-                inline=False
+                name = "Utilisation",
+                value = "%s%s %s" % (PREFIX, command, commandsList['usage'][category][command]),
+                inline = False
             )
 
         last_update = datetime.fromtimestamp(int(os.path.getmtime(os.path.realpath(__file__))))
-        embed.set_footer(text="Dernière mise à jour : %s" % last_update)
+        embed.set_footer(text = "Dernière mise à jour : %s" % last_update)
 
         return embed
 
-    @commands.command(aliases=['aide', 'h', 'oskour', 'aled'])
+    @commands.command(aliases = ['aide', 'h', 'oskour', 'aled'])
     async def help(self, context, query: str = None):
         PREFIX = config.getPrefix()
         embed = discord.Embed(
-            color=0x565493
+            color = 0x565493
         )
         last_update = datetime.fromtimestamp(int(os.path.getmtime(os.path.realpath(__file__))))
-        embed.set_footer(text="Dernière mise à jour : %s" % last_update)
+        embed.set_footer(text = "Dernière mise à jour : %s" % last_update)
 
         if query is None:
             for category in categories['description']:
                 embed.set_author(
-                    name="Aide de %s" % (self.bot.user.display_name),
-                    icon_url="https://i.imgur.com/C66eNWB.jpg"
+                    name = "Aide de %s" % (self.bot.user.display_name),
+                    icon_url = self.bot.user.display_avatar.url
                 )
                 embed.title = 'Liste des catégories de commandes'
                 embed.add_field(
-                    name=categories['displayName'][category],
-                    value="-> %shelp %s\n%s" % (PREFIX, category, categories['description'][category]),
-                    inline=False
+                    name = categories['displayName'][category],
+                    value = "-> %shelp %s\n%s" % (PREFIX, category, categories['description'][category]),
+                    inline = False
                 )
         else:
             if query in categories['description']:
                 category = query
                 embed.set_author(
-                    name="Aide de %s" % (categories['displayName'][category]),
-                    icon_url="https://i.imgur.com/C66eNWB.jpg"
+                    name = "Aide de %s" % (categories['displayName'][category]),
+                    icon_url = self.bot.user.display_avatar.url
                 )
                 embed.title = 'Liste des commandes de %s' % categories['displayName'][category]
                 for command in commandsList['description'][category]:
                     if command in commandsList['usage'][category]:
                         embed.add_field(
-                            name=PREFIX+command,
-                            value=commandsList['description'][category][command],
-                            inline=True
+                            name = PREFIX + command,
+                            value = commandsList['description'][category][command],
+                            inline = True
                         )
                         embed.add_field(
-                            name="Utilisation",
-                            value="%s%s %s" % (PREFIX, command, commandsList['usage'][category][command]),
-                            inline=True
+                            name = "Utilisation",
+                            value = "%s%s %s" % (PREFIX, command, commandsList['usage'][category][command]),
+                            inline = True
                         )
                     else:
                         embed.add_field(
-                            name=PREFIX+command,
-                            value=commandsList['description'][category][command],
-                            inline=False
+                            name = PREFIX + command,
+                            value = commandsList['description'][category][command],
+                            inline = False
                         )
             else:
                 return await context.send("La catégorie %s n'existe pas\n%shelp pour obtenir de l'aide" % (query, PREFIX))
 
-        return await context.send(embed=embed)
+        return await context.send(embed = embed)
