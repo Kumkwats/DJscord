@@ -37,9 +37,9 @@ class Config():
 
             self.afkLeaveActive = True
             self.afkLeaveTime = 15 # default timeout afk leave
-            if 'minutes-before-disconneting' in self.conf:
-                self.afkLeaveActive = True if self.conf['minutes-before-disconneting'] > 0 else False
-                self.afkLeaveTime = self.conf['minutes-before-disconneting']
+            if 'minutes-before-disconnecting' in self.conf:
+                self.afkLeaveActive = True if self.conf['minutes-before-disconnecting'] > 0 else False
+                self.afkLeaveTime = self.conf['minutes-before-disconnecting']
 
             if self.afkLeaveActive:
                 print("Config: Will disconnect when inactive for more than %d minutes" % (self.afkLeaveTime))
