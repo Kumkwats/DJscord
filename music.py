@@ -1,7 +1,7 @@
 import asyncio
 import os
 import discord
-from discord.ext import commands
+from discord.ext import commands,tasks
 from youtube import Youtube
 from spotify import Spotify
 from help import Help
@@ -9,8 +9,9 @@ from config import config
 import time
 import random
 
-Queues = {}
+activityCheckDelta = 5 #number of seconds between every AFK check
 
+Queues = {}
 
 def time_format(seconds):
     if seconds is not None:
@@ -61,11 +62,44 @@ class Queue():
         self.cursor = 0
         self.starttime = 0
         self.pausetime = 0
+        self.lastVoiceActivityTime = time.time()
         self.voice_client = voice_client
         self.text_channel = text_channel
         self.repeat_mode = repeat_mode  # none, entry, playlist, all
         self.repeat_bypass = False
 
+        #self.time = 0 #timeout
+        
+
+    #Voice Channel
+    def getVoiceChannel(self):
+        return self.voice_client.channel
+
+    #Voice Client
+    def isPlaying(self):
+        return self.voice_client.is_playing()
+
+    async def connect(self, voiceChannel):
+        self.voice_client = await voiceChannel.connect(timeout=600, reconnect=True)
+
+    async def move(self, newVoiceChannel):
+        await self.voice_client.move_to(newVoiceChannel)
+
+    async def disconnect(self):
+        await self.voice_client.disconnect()
+
+    def voiceActivityUpdate(self):
+        self.lastVoiceActivityTime = time.time()
+
+    #Text Channel
+    def checkTextChannel(self, textChannel): #preventing typing commands in other text channels
+        return self.text_channel == textChannel
+
+    def moveTextChannel(self, newTextChannel): #change listening text channel
+        self.text_channel = newTextChannel
+
+
+    #Playback
     async def startPlayback(self):
         if self.voice_client.is_connected() and not self.voice_client.is_playing():
             entry = self.content[self.cursor]
@@ -150,6 +184,8 @@ class Queue():
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        if config.afkLeaveActive:
+            self.musicTimeout.start()
 
     @commands.command(aliases=['p', 'lire', 'jouer'])
     async def play(self, context, *, query: str = None):
@@ -158,21 +194,19 @@ class Music(commands.Cog):
 
         authorVoice = context.author.voice
         voiceClient = context.voice_client
+        authorText = context.channel
 
         guild = context.guild.id
 
 
         if authorVoice is None:
             return await context.send("Vous n'êtes pas connectés à un salon vocal")
-        elif voiceClient is not None:
-            await voiceClient.move_to(authorVoice.channel)
-            # print("voice client not none")
         else:
-            voiceClient = await authorVoice.channel.connect(timeout=600, reconnect=True)
-            
             if guild not in Queues:
-                Queues[guild] = Queue(voiceClient, context.channel) 
-            
+                # print("Guild (%d): new connection to %s" % (guild, authorVoice.channel))
+                voiceClient = await authorVoice.channel.connect(timeout=600, reconnect=True)
+                Queues[guild] = Queue(voiceClient, authorText)
+
                 #Only add the startup sound if there is no queue
                 check, file = pickSoundFile("Startup")
                 if check:
@@ -192,12 +226,11 @@ class Music(commands.Cog):
                         print("Aucun fichier trouvé pour le startup")
                 else:
                     print("dossier Sounds inexistant")
-                
-            # print("voice client none")
-
-        
-        if guild not in Queues:
-            Queues[guild] = Queue(voiceClient, context.channel)
+            else:
+                if authorVoice.channel != Queues[guild].voice_client.channel:
+                    await Queues[guild].move(authorVoice.channel)
+                    # print("Guild (%d): moved to %s" % (guild, authorVoice.channel))
+            # print("Guild (%d): Connected to %s (number of members: %d)" % (guild, voiceClient.channel.name, len(voiceClient.channel.members)))
 
         queue = Queues[guild]
         entry = None
@@ -324,17 +357,22 @@ class Music(commands.Cog):
 
             content = "Chaîne : [%s](%s)\n" % (entry.channel, entry.channel_url)
             if Queues[guild].cursor == index:
-                pause = ""
-                if voiceClient.is_paused():
-                    current = time_format(int(Queues[guild].pausetime - Queues[guild].starttime))
-                    pause = "[paused]"
-                else:
-                    current = time_format(int(time.time() - Queues[guild].starttime))
-
+                pause = "[Paused]" if voiceClient.is_paused() else ""
+                current = Queues[guild].pausetime - Queues[guild].starttime if voiceClient.is_paused() else time.time() - Queues[guild].starttime
+                
                 if entry.duration == 0:
-                    content += "Progression : %s %s\n" % (current, pause)
+                    content += "Progression : %s %s\n" % (time_format(current), pause)
                 else:
-                    content += "Progression : %s / %s %s\n" % (current, time_format(entry.duration), pause)
+                    content += "Progression : %s/%s %s\n" % (time_format(current), time_format(entry.duration), pause)
+                    progress = (current/entry.duration)*20
+                    content += "["
+                    for i in range(0,20):
+                        if int(progress) == i:
+                            content += "●"
+                        else:
+                            content += "─"
+                    content += "] (%s%s)\n" % (int((current/entry.duration)*100),'%')
+
 
             if entry.album is not None:
                 content += "Album : %s\n" % (entry.album)
@@ -348,23 +386,23 @@ class Music(commands.Cog):
                 description=content,
                 color=0x565493
             )
+
             if Queues[guild].cursor == index:
-                name = "En cours de lecture"
-                if voiceClient.is_paused():
-                    name = "En pause"
+                bigPause = "❚❚" if voiceClient.is_paused() else "▶"
+                name = bigPause + "\t" + (" En pause" if voiceClient.is_paused() else " En cours de lecture")
             else:
                 name = "Informations piste"
-            embed.set_author(name=name, icon_url="https://i.imgur.com/C66eNWB.jpg")
+            embed.set_author(name=name, icon_url = self.bot.user.display_avatar.url)
             embed.set_image(url=entry.thumbnail)
-            # embed.set_thumbnail(url="https://i.imgur.com/C66eNWB.jpg")
-            embed.set_footer(text="Demandé par %s" % entry.applicant.display_name, icon_url=entry.applicant.avatar_url_as())
+            #embed.set_thumbnail(url=self.bot.user.avatar.url)
+            embed.set_footer(text="Demandé par %s" % entry.applicant.display_name, icon_url = entry.applicant.display_avatar.url)
 
             return await context.send(embed=embed)
         else:
             return await context.send('L\'index %d n\'existe pas' % (index))
 
-    @commands.command(aliases=['q', 'file'])
-    async def queue(self, context, page: int = None):
+    @commands.command(aliases=['q', 'file', 'dir', 'ls'])
+    async def queue(self, context, page:int = None):
         guild = context.guild.id
         if guild not in Queues:
             return await context.send('Aucune liste d\'attente')
@@ -437,12 +475,12 @@ class Music(commands.Cog):
         footerText = "Nombre d'entrées : %d | Mode de répétition : %s\nDurée totale : %s | Taille totale : %.2fMo" % (Queues[guild].size, repeat_text[Queues[guild].repeat_mode], time_format(totalDuration), totalSize/1000000)
         if page is not None:
             footerText += "\nPage %d/%d" % (page, ((Queues[guild].size - 1) // printSize) + 1)
-        embed.set_author(name = "Liste de lecture", icon_url = "https://i.imgur.com/C66eNWB.jpg")
+        embed.set_author(name = "Liste de lecture", icon_url = self.bot.user.avatar.url)
         embed.set_footer(text = footerText)
 
         return await context.send(embed=embed)
 
-    @commands.command(aliases=['mv', 'déplacer'])
+    @commands.command(aliases=['mv', 'déplacer', 'bouge'])
     async def move(self, context, frm: int = None, to: int = None):
         guild = context.guild.id
         if guild not in Queues:
@@ -510,24 +548,26 @@ class Music(commands.Cog):
                     os.remove(config.downloadDirectory + entry.filename)
             return await context.send("Les entrées commençant à %d jusqu'à %s ont bien été supprimés" % (idx1, "la fin de la liste" if idx2 == oldSize else str(idx2 - 1)))
 
-    @commands.command(aliases=['s', 'passer'])
+    @commands.command(aliases=['s', 'passer', 'next', 'suivant'])
     async def skip(self, context):
-        voiceClient = context.voice_client
         guild = context.guild.id
+        voiceClient = context.voice_client
+
         if voiceClient is not None:
             if Queues[guild].cursor < Queues[guild].size:
                 Queues[guild].repeat_bypass = True
                 Queues[guild].cursor = Queues[guild].cursor + 1
-                voiceClient.stop()
+                Queues[guild].voice_client.stop()
             else:
                 return await context.send('Rien à passer')
         else:
             return await context.send('Aucune lecture en cours')
 
-    @commands.command(aliases=['pauser', 'suspendre', 'uspendre', 'halte'])
+    @commands.command(aliases=['pauser', 'suspendre', 'sus', 'halte'])
     async def pause(self, context):
-        voiceClient = context.voice_client
         guild = context.guild.id
+        voiceClient = context.voice_client
+        
         if voiceClient is not None:
             if voiceClient.is_playing():
                 voiceClient.pause()
@@ -540,8 +580,9 @@ class Music(commands.Cog):
 
     @commands.command(aliases=['reprendre'])
     async def resume(self, context):
-        voiceClient = context.voice_client
         guild = context.guild.id
+        voiceClient = context.voice_client
+        
         if voiceClient is not None:
             if voiceClient.is_paused():
                 voiceClient.resume()
@@ -553,32 +594,36 @@ class Music(commands.Cog):
         else:
             return await context.send('Aucune lecture en cours')
 
-    @commands.command(aliases=['arreter', 'stopper', 'hutup', 'top'])
+    @commands.command(aliases=['arreter', 'stopper', 'shutup', 'tg'])
     async def stop(self, context):
+        #guild = context.guild.id
         voiceClient = context.voice_client
+        
         if voiceClient is not None:
-            if voiceClient.is_playing() and context.author.voice is None:
-                return await context.send("Je suis en train de jouer de la musique là, viens me le dire en face !")
-            voiceClient.stop()
-            return await context.send("Ok j'arrête de lire la musique :(")
+            if voiceClient.is_playing or voiceClient.is_paused:
+                if context.author.voice is None or context.author.voice.channel != voiceClient.channel:
+                    return await context.send("Je suis en train de jouer de la musique là, viens me le dire en face !")
+                voiceClient.stop()
+                return await context.send("Ok j'arrête de lire la musique :(")
         else:
             return await context.send("Je suis pas connecté en fait !")
 
-    @commands.command(aliases=['quitter', 'deconnexion', 'deco'])
+    @commands.command(aliases=['quitter', 'deconnexion', 'deco', 'ntm', 'l'])
     async def leave(self, context):
-        voiceClient = context.voice_client
         guild = context.guild.id
-        
+        voiceClient = context.voice_client
+
         if voiceClient is not None:
-            if voiceClient.is_playing() and context.author.voice is None:
+            if voiceClient.is_playing() and (context.author.voice is None or context.author.voice.channel != voiceClient.channel):
                 return await context.send("Je suis en train de jouer de la musique là, viens me le dire en face !")
             voiceClient.stop()
+            voiceClient.cleanup()
             await voiceClient.disconnect()
             if guild in Queues:
                 for entry in Queues[guild].content:
                     if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
                         os.remove(config.downloadDirectory + entry.filename) # ATM (if running on Windows), the file currently playing will not be erased
-                Queues.pop(guild) 
+            Queues.pop(guild)
             return await context.send('Ok bye!')
         else:
             return await context.send('Je suis pas connecté en fait !')
@@ -623,6 +668,34 @@ class Music(commands.Cog):
             return  # await context.send('Direction la musique n°%d' % index)
         else:
             return await context.send('L\'index %d n\'existe pas' % index)
+    
+    #afk loop
+    @tasks.loop(seconds=activityCheckDelta)
+    async def musicTimeout(self):
+        GuildsToDisconnect = []
+        for guild in Queues.keys():
+            if Queues[guild].voice_client is not None:
+                if Queues[guild].isPlaying():
+                    Queues[guild].voiceActivityUpdate()
+                else:
+                    if time.time() - Queues[guild].lastVoiceActivityTime >= config.afkLeaveTime*60:
+                        GuildsToDisconnect.append(guild)
+            else:
+                print("Guild (%d): no voice" % (guild))
+        if len(GuildsToDisconnect) > 0:
+            for id in GuildsToDisconnect:
+                # membersInVoice = len(Queues[guild].getVoiceChannel().members)
+                # if membersInVoice > 1:
+                #     await Queues[id].text_channel.send("Je m'en vais (ça fait au moins %d minutes qu'il n'y a plus de musique)" % (config.afkLeaveTime))
+                await Queues[id].disconnect()
+                print(("Guild (%d): Disconnected for inactivity" % (guild)))
+                for entry in Queues[id].content:
+                    if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
+                        os.remove(config.downloadDirectory + entry.filename) #If running on Windows, the file currently playing is not erased
+                Queues.pop(id)
+            
+            
+
         
         
 def pickSoundFile(folderName):

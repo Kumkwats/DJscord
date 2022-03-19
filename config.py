@@ -14,23 +14,43 @@ class Config():
             print("Config: Will write and read files at those directories (relative to working dir):")
             
             self.downloadDirectory = "downloads/" # default downloads directory
-            if 'download-director' in self.conf:
+            if 'download-directory' in self.conf:
                 self.downloadDirectory = self.conf['download-directory']
-            
+                if self.downloadDirectory[0:2] == "./": # when ./ is added it mess up with the filename for some reason
+                    self.downloadDirectory = self.downloadDirectory[2:]
+                if self.downloadDirectory[-1] != "/":
+                    self.downloadDirectory += "/"
+
             print("\tDownloaded files at: " + self.downloadDirectory)
+
 
             self.soundDirectory = "sounds/" # default sounds directory
             if 'sound-directory' in self.conf:
                 self.soundDirectory = self.conf['sound-directory']
+                if self.soundDirectory[0:2] == "./":
+                    self.soundDirectory = self.downloadDirectory[2:]
+                if self.soundDirectory[-1] != "/":
+                    self.soundDirectory += "/"
             
             print("\tOther sound files at: " + self.soundDirectory)
+
+
+            self.afkLeaveActive = True
+            self.afkLeaveTime = 15 # default timeout afk leave
+            if 'minutes-before-disconneting' in self.conf:
+                self.afkLeaveActive = True if self.conf['minutes-before-disconneting'] > 0 else False
+                self.afkLeaveTime = self.conf['minutes-before-disconneting']
+
+            if self.afkLeaveActive:
+                print("Config: Will disconnect when inactive for more than %d minutes" % (self.afkLeaveTime))
+            else:
+                print("Config: Will not disconnect when inactive")
 
             self.spotifyEnabled = False
             if 'spotify-client-id' and 'spotify-client-secret' in self.conf:
                 self.spotifyEnabled = True
-                print("Config: Spotify research is enabled")
-            else:
-                print("Config: Spotify research is disabled")
+            print("Config: Spotify research is %s" % ("enabled" if self.spotifyEnabled else "disabled"))
+
             
             
             self.FoxDotEnabled = False
