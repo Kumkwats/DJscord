@@ -29,8 +29,9 @@ commandsList = {
             'remove': 'Supprime une musique de la liste d\'attente',
             'pause': 'Met en pause la lecture',
             'resume': 'Reprend la lecture',
-            'repeat': 'Change le mode de répétition',
+            'seek': 'Se déplacer dans la musique',
             'stop': 'Arrête la lecture',
+            'repeat': 'Change le mode de répétition',
             'leave': 'Arrête la lecture, vide la liste d\'attente et se déconnecte',
             'goto': 'Se déplace à un autre musique de la liste'
         },
@@ -49,6 +50,7 @@ commandsList = {
             'info': '<position>',
             'move': '<position actuelle> <nouvelle position>',
             'remove': '<position de l\'entrée / de début> *(optionel)<position de fin>*',
+            'seek': '<horodatage>',
             'repeat': '<mode>\nExemples : none, entry, all, playlist',
             'goto': '<position>'
         },

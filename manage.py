@@ -74,33 +74,6 @@ class Manage(commands.Cog):
         await message.reply("Nan ça va tkt")
 
 
-
-    # Debug commands
-
-    @commands.command()
-    @commands.is_owner()
-    async def connect(self, context): # Connect without playing music
-        authorVoice = context.author.voice
-        voiceClient = context.voice_client
-
-        if authorVoice is not None:
-            if voiceClient is not None:
-                await voiceClient.move_to(authorVoice.channel)
-            else:
-                await authorVoice.channel.connect(timeout=600, reconnect=True)
-            await context.send("Connecté !")
-        else:
-            await context.send("Connecte toi d'abord en fait...")
-
-
-    @connect.error
-    async def connect_error(self, context, error, message): # Connect without playing music
-        if isinstance(error, commands.NotOwner):
-            return await context.send("Nan t'as pas le droit %s" % (message.author.display_name))
-        else:
-            print(error)
-            return await context.send("Something is wrong, I can feel it...")
-
     @commands.command()
     async def ping(self, context): # Show latency from API and Voice channel if connected
         msg = "Pong!"

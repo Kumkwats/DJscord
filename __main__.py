@@ -6,6 +6,7 @@ from config import config
 from help import Help
 from music import Music
 from manage import Manage
+from debug import Debug
 from fun import Fun
 
 if config.FoxDotEnabled is True:
@@ -41,6 +42,7 @@ if __name__ == "__main__":
     bot.add_cog(Fun(bot))
     bot.add_cog(Manage(bot))
     bot.add_cog(Help(bot))
+    bot.add_cog(Debug(bot))
     if config.FoxDotEnabled is True:
         bot.add_cog(Foxdot(bot))
     bot.run(config.token)

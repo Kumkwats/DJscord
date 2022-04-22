@@ -1,4 +1,5 @@
 import asyncio
+from audioop import reverse
 import os
 import discord
 from discord.ext import commands,tasks
@@ -67,6 +68,7 @@ class Queue():
         self.text_channel = text_channel
         self.repeat_mode = repeat_mode  # none, entry, playlist, all
         self.repeat_bypass = False
+        self.seekTime = -1
 
         #self.time = 0 #timeout
         
@@ -76,11 +78,17 @@ class Queue():
         return self.voice_client.channel
 
     #Voice Client
+    def isConnected(self):
+        return self.voice_client.is_connected()
+
     def isPlaying(self):
         return self.voice_client.is_playing()
 
     async def connect(self, voiceChannel):
         self.voice_client = await voiceChannel.connect(timeout=600, reconnect=True)
+        
+    async def reconnect(self):
+        self.voice_client = await self.voice_client.channel.connect(timeout=600, reconnect=True)
 
     async def move(self, newVoiceChannel):
         await self.voice_client.move_to(newVoiceChannel)
@@ -100,15 +108,26 @@ class Queue():
 
 
     #Playback
-    async def startPlayback(self):
+    async def startPlayback(self, timestart = 0, supressOutput = False):
         if self.voice_client.is_connected() and not self.voice_client.is_playing():
             entry = self.content[self.cursor]
             filename = config.downloadDirectory + entry.filename if entry.fileSize != 0 else entry.filename
-            player = discord.FFmpegPCMAudio(filename, options="-vn")
-            self.voice_client.play(player, after=lambda e: self.nextEntry())
-            self.starttime = time.time()
+            #seek parameters
+            before = ""
+            if timestart > 0:
+                before = "-ss %d" % (timestart)
+            else:
+                timestart = 0
 
-            await self.text_channel.send('En lecture : %s' % (entry.title))
+            player = discord.FFmpegPCMAudio(filename, before_options = before, options = "-vn")
+            self.voice_client.play(player, after=lambda e: self.nextEntry())
+            self.starttime = time.time() - timestart
+
+            if not supressOutput:
+                if timestart > 0:
+                    await self.text_channel.send('Déplacement du pointeur à **[%s]** dans la lecture en cours : %s' % (time_format(timestart), entry.title))
+                else:
+                    await self.text_channel.send('Maintenant en lecture : %s' % (entry.title))
 
     def nextEntry(self):
         if self.repeat_bypass is False:
@@ -143,11 +162,20 @@ class Queue():
                         gotostart()
 
                 self.cursor = self.cursor + 1
+        
+        noOutput = False
+        startingTime = 0
+        if self.seekTime >= 0 and self.repeat_bypass is True:
+            #noOutput = True
+            startingTime = self.seekTime
+            print("seeking entry at %d seconds" % (self.seekTime))
+        else:
+            print("next entry")
 
+        self.seekTime = -1
         self.repeat_bypass = False
-        print("next entry")
         if self.cursor < self.size:
-            coro = self.startPlayback()
+            coro = self.startPlayback(timestart = startingTime, supressOutput = noOutput)
             fut = asyncio.run_coroutine_threadsafe(coro, self.voice_client.loop)
             try:
                 fut.result()
@@ -193,7 +221,7 @@ class Music(commands.Cog):
             return await context.send(embed=Help.get(context, 'music', 'play'))
 
         authorVoice = context.author.voice
-        voiceClient = context.voice_client
+        #Queues[guild].voice_client = context.voice_client
         authorText = context.channel
 
         guild = context.guild.id
@@ -203,9 +231,10 @@ class Music(commands.Cog):
             return await context.send("Vous n'êtes pas connectés à un salon vocal")
         else:
             if guild not in Queues:
-                # print("Guild (%d): new connection to %s" % (guild, authorVoice.channel))
-                voiceClient = await authorVoice.channel.connect(timeout=600, reconnect=True)
-                Queues[guild] = Queue(voiceClient, authorText)
+                print("Guild (%d): new connection to channel%s" % (guild, authorVoice.channel))
+                Queues[guild] = Queue(None, authorText)
+                Queues[guild].voice_client = await authorVoice.channel.connect(timeout=600, reconnect=True)
+                #Queues[guild] = Queue(Queues[guild].voice_client, authorText)
 
                 #Only add the startup sound if there is no queue
                 check, file = pickSoundFile("Startup")
@@ -227,10 +256,22 @@ class Music(commands.Cog):
                 else:
                     print("dossier Sounds inexistant")
             else:
+                if not Queues[guild].voice_client.is_connected():
+                    print("Voice client is none")
+                    await Queues[guild].connect(authorVoice.channel)
+                    if Queues[guild].voice_client.is_connected():
+                        print("Voice client is reconnected")
+                    else:
+                        print("Voice client was unable to reconnect")
+                        Queues.pop(guild)
+                        return await context.send("Je n'ai pas réussi à me reconnecter...")
+                        
+
+                        
                 if authorVoice.channel != Queues[guild].voice_client.channel:
                     await Queues[guild].move(authorVoice.channel)
                     # print("Guild (%d): moved to %s" % (guild, authorVoice.channel))
-            # print("Guild (%d): Connected to %s (number of members: %d)" % (guild, voiceClient.channel.name, len(voiceClient.channel.members)))
+            # print("Guild (%d): Connected to %s (number of members: %d)" % (guild, Queues[guild].voice_client.channel.name, len(Queues[guild].voice_client.channel.members)))
 
         queue = Queues[guild]
         entry = None
@@ -304,7 +345,7 @@ class Music(commands.Cog):
                                 continue
                             fileSize = os.path.getsize(config.downloadDirectory + filename)
 
-                        if voiceClient.is_connected():
+                        if Queues[guild].voice_client.is_connected():
                             entry = Entry(filename, applicant, fileSize, playlist)
                             entry.buildMetadataYoutube(data['entries'][i])
                             position = await queue.addEntry(entry, queue_start + i) #TODO bug when stopping the bot while a playlist is currently added in the queue, the bot will resume by itself by adding the next track to the queue
@@ -328,11 +369,13 @@ class Music(commands.Cog):
                         return await message.edit(content="Erreur lors du téléchargement de %s" % data['title'])
                     fileSize = os.path.getsize(config.downloadDirectory + filename)
 
-                if voiceClient.is_connected():
+                if Queues[guild].voice_client.is_connected():
                     entry = Entry(filename, applicant, fileSize)
                     entry.buildMetadataYoutube(data)
                     position = await queue.addEntry(entry)
                     await message.edit(content="%d: %s a été ajouté à la file d\'attente" % (position, data['title']))
+                else:
+                    print("not connected")
 
     @commands.command(aliases=['np', 'en lecture'])
     async def nowplaying(self, context):
@@ -345,7 +388,7 @@ class Music(commands.Cog):
     @commands.command(aliases=['i'])
     async def info(self, context, index: int = None):
         guild = context.guild.id
-        voiceClient = context.voice_client
+        Queues[guild].voice_client = context.voice_client
         if guild not in Queues:
             return await context.send('Aucune liste d\'attente')
 
@@ -357,8 +400,8 @@ class Music(commands.Cog):
 
             content = "Chaîne : [%s](%s)\n" % (entry.channel, entry.channel_url)
             if Queues[guild].cursor == index:
-                pause = "[Paused]" if voiceClient.is_paused() else ""
-                current = Queues[guild].pausetime - Queues[guild].starttime if voiceClient.is_paused() else time.time() - Queues[guild].starttime
+                pause = "[Paused]" if Queues[guild].voice_client.is_paused() else ""
+                current = Queues[guild].pausetime - Queues[guild].starttime if Queues[guild].voice_client.is_paused() else time.time() - Queues[guild].starttime
                 
                 if entry.duration == 0:
                     content += "Progression : %s %s\n" % (time_format(current), pause)
@@ -388,8 +431,8 @@ class Music(commands.Cog):
             )
 
             if Queues[guild].cursor == index:
-                bigPause = "❚❚" if voiceClient.is_paused() else "▶"
-                name = bigPause + "\t" + (" En pause" if voiceClient.is_paused() else " En cours de lecture")
+                bigPause = "❚❚" if Queues[guild].voice_client.is_paused() else "▶"
+                name = bigPause + "\t" + (" En pause" if Queues[guild].voice_client.is_paused() else " En cours de lecture")
             else:
                 name = "Informations piste"
             embed.set_author(name=name, icon_url = self.bot.user.display_avatar.url)
@@ -502,7 +545,7 @@ class Music(commands.Cog):
     @commands.command(aliases=['rm', 'supprimer', 'enlever'])
     async def remove(self, context, idx1: str = None, idx2: str = None):
         guild = context.guild.id
-        voiceClient = context.voice_client
+        Queues[guild].voice_client = context.voice_client
         if guild not in Queues:
             return await context.send('Aucune liste d\'attente')
 
@@ -517,7 +560,7 @@ class Music(commands.Cog):
         if idx2 is None: # remove one entry
             entry = Queues[guild].getEntry(idx1)
             if idx1 == Queues[guild].cursor:
-                voiceClient.stop()
+                Queues[guild].voice_client.stop()
             Queues[guild].removeEntry(idx1)
             if idx1 <= Queues[guild].cursor:
                 Queues[guild].cursor -= 1
@@ -538,7 +581,7 @@ class Music(commands.Cog):
             if idx1 > (idx2 - 1):
                 return await context.send("Attention à l'ordre des index !")
             if idx1 <= Queues[guild].cursor <= idx2 - 1:
-                voiceClient.stop()
+                Queues[guild].voice_client.stop()
             for i in range(idx2 - idx1):
                 entry = Queues[guild].getEntry(idx1)
                 Queues[guild].removeEntry(idx1)
@@ -548,12 +591,60 @@ class Music(commands.Cog):
                     os.remove(config.downloadDirectory + entry.filename)
             return await context.send("Les entrées commençant à %d jusqu'à %s ont bien été supprimés" % (idx1, "la fin de la liste" if idx2 == oldSize else str(idx2 - 1)))
 
+    @commands.command(aliases=['sk'])
+    async def seek(self, context, timeCode: str = None):
+        guild = context.guild.id
+        Queues[guild].voice_client = context.voice_client
+
+        if guild not in Queues:
+            return await context.send('Pas de lecture en cours')
+
+        if timeCode is None:
+            return await context.send(embed=Help.get(context, 'music', 'info'))
+
+        currentEntry = Queues[guild].content[Queues[guild].cursor]
+        if currentEntry.duration <= 0:
+            return await context.send("Ce morceau n'est pas seekable")
+
+        #Decoding timeCode
+        if timeCode is not None:
+            try:
+                time = list(map(int, timeCode.split(":")))[::-1]
+            except:
+                return await context.send("Quelque chose ne va pas dans la syntaxe (doit être hh:mm:ss ou mmmm:ss ou bien ssss)")
+        else:
+            return await context.send(embed=Help.get(context, 'music', 'play'))
+        (secs, mins, hrs) = (0,0,0)
+        secs = time[0]
+        if len(time) > 1:
+            if 0 <= secs < 60:
+                mins = time[1]
+            else:
+                return await context.send("Le temps n'est pas conforme")
+            if len(time) > 2:
+                if  0 <= mins < 60:
+                    hrs = time[2]
+                else:
+                    return await context.send("Le temps n'est pas conforme")
+                if hrs < 0:
+                    return await context.send("Le temps n'est pas conforme")
+        desiredStart = secs + 60*mins + 60*60*hrs
+        
+        if 0 <= desiredStart < currentEntry.duration -1:
+            Queues[guild].repeat_bypass = True
+            Queues[guild].seekTime = desiredStart
+            Queues[guild].voice_client.stop()
+        else:
+            return await context.send("La vidéo sera déjà finie à %s..." % (time_format(desiredStart)))
+        
+
+
     @commands.command(aliases=['s', 'passer', 'next', 'suivant'])
     async def skip(self, context):
         guild = context.guild.id
-        voiceClient = context.voice_client
+        #voiceClient = context.voice_client
 
-        if voiceClient is not None:
+        if guild in Queues:
             if Queues[guild].cursor < Queues[guild].size:
                 Queues[guild].repeat_bypass = True
                 Queues[guild].cursor = Queues[guild].cursor + 1
@@ -566,63 +657,67 @@ class Music(commands.Cog):
     @commands.command(aliases=['pauser', 'suspendre', 'sus', 'halte'])
     async def pause(self, context):
         guild = context.guild.id
-        voiceClient = context.voice_client
+        #voiceClient = context.voice_client
         
-        if voiceClient is not None:
-            if voiceClient.is_playing():
-                voiceClient.pause()
+        if guild in Queues:
+            if Queues[guild].voice_client.is_playing():
+                Queues[guild].voice_client.pause()
                 Queues[guild].pausetime = time.time()
                 return await context.send('Mis en pause')
             else:
                 return await context.send('Déjà en pause')
         else:
-            return await context.send('Aucune lecture en cours')
+            return await context.send('Aucune lecture en cours sur ce serveur')
 
     @commands.command(aliases=['reprendre'])
     async def resume(self, context):
         guild = context.guild.id
-        voiceClient = context.voice_client
+        #voiceClient = context.voice_client
         
-        if voiceClient is not None:
-            if voiceClient.is_paused():
-                voiceClient.resume()
+        if guild in Queues:
+            if Queues[guild].voice_client.is_paused():
+                Queues[guild].voice_client.resume()
                 Queues[guild].starttime = time.time() - (Queues[guild].pausetime - Queues[guild].starttime) # Setting starttime to the correct time to ensure that the time elapsed on the entry is correct when resuming
                 Queues[guild].pausetime = 0
                 return await context.send('Reprise de la lecture')
             else:
                 return await context.send('Déjà en lecture')
         else:
-            return await context.send('Aucune lecture en cours')
+            return await context.send('Aucune lecture en cours sur ce serveur')
 
     @commands.command(aliases=['arreter', 'stopper', 'shutup', 'tg'])
     async def stop(self, context):
-        #guild = context.guild.id
-        voiceClient = context.voice_client
+        guild = context.guild.id
+        #voiceClient = context.voice_client
         
-        if voiceClient is not None:
-            if voiceClient.is_playing or voiceClient.is_paused:
-                if context.author.voice is None or context.author.voice.channel != voiceClient.channel:
+        if Queues[guild].voice_client is not None:
+            if Queues[guild].voice_client.is_playing or Queues[guild].voice_client.is_paused:
+                if context.author.voice is None or context.author.voice.channel != Queues[guild].voice_client.channel:
                     return await context.send("Je suis en train de jouer de la musique là, viens me le dire en face !")
-                voiceClient.stop()
+                Queues[guild].repeat_bypass = True
+                Queues[guild].voice_client.stop()
                 return await context.send("Ok j'arrête de lire la musique :(")
         else:
-            return await context.send("Je suis pas connecté en fait !")
+            return await context.send("Je suis pas connecté sur ce serveur en fait !")
 
     @commands.command(aliases=['quitter', 'deconnexion', 'deco', 'ntm', 'l'])
     async def leave(self, context):
         guild = context.guild.id
-        voiceClient = context.voice_client
+        #voiceClient = context.voice_client
 
-        if voiceClient is not None:
-            if voiceClient.is_playing() and (context.author.voice is None or context.author.voice.channel != voiceClient.channel):
+        if Queues[guild].voice_client is not None:
+            if Queues[guild].voice_client.is_playing() and (context.author.voice is None or context.author.voice.channel != Queues[guild].voice_client.channel):
                 return await context.send("Je suis en train de jouer de la musique là, viens me le dire en face !")
-            voiceClient.stop()
-            voiceClient.cleanup()
-            await voiceClient.disconnect()
+            Queues[guild].voice_client.stop()
+            Queues[guild].voice_client.cleanup()
+            await Queues[guild].voice_client.disconnect()
             if guild in Queues:
                 for entry in Queues[guild].content:
                     if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
-                        os.remove(config.downloadDirectory + entry.filename) # ATM (if running on Windows), the file currently playing will not be erased
+                        try:
+                            os.remove(config.downloadDirectory + entry.filename) # ATM (if running on Windows), the file currently playing will not be erased
+                        except:
+                            print("error remove")
             Queues.pop(guild)
             return await context.send('Ok bye!')
         else:
@@ -631,6 +726,7 @@ class Music(commands.Cog):
     @commands.command(aliases=['r', 'repeter'])
     async def repeat(self, context, mode: str = None):
         guild = context.guild.id
+
         if guild not in Queues:
             return await context.send('Aucune liste d\'attente')
 
@@ -651,7 +747,7 @@ class Music(commands.Cog):
     @commands.command(aliases=['g', 'go', 'gt'])
     async def goto(self, context, index: int = None):
         guild = context.guild.id
-        voiceClient = context.voice_client
+        #voiceClient = context.voice_client
         if guild not in Queues:
             return await context.send('Aucune liste d\'attente')
 
@@ -660,9 +756,9 @@ class Music(commands.Cog):
 
         if index < Queues[guild].size and index >= 0:
             Queues[guild].cursor = index
-            if context.voice_client.is_playing() or context.voice_client.is_paused():
+            if Queues[guild].voice_client.is_playing() or Queues[guild].voice_client.is_paused():
                 Queues[guild].repeat_bypass = True
-                voiceClient.stop()
+                Queues[guild].voice_client.stop()
             else:
                 await Queues[guild].startPlayback()
             return  # await context.send('Direction la musique n°%d' % index)
@@ -693,9 +789,6 @@ class Music(commands.Cog):
                     if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
                         os.remove(config.downloadDirectory + entry.filename) #If running on Windows, the file currently playing is not erased
                 Queues.pop(id)
-            
-            
-
         
         
 def pickSoundFile(folderName):
