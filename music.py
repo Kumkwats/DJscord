@@ -1,14 +1,18 @@
-import asyncio
-from audioop import reverse
 import os
+import asyncio
+import time
+import random
+
 import discord
+
+#from audioop import reverse
 from discord.ext import commands,tasks
+
 from youtube import Youtube
 from spotify import Spotify
 from help import Help
 from config import config
-import time
-import random
+
 
 activityCheckDelta = 5 #number of seconds between every AFK check
 
@@ -240,7 +244,7 @@ class Music(commands.Cog):
                 check, file = pickSoundFile("Startup")
                 if check:
                     if file != "":
-                        entry = Entry(file, context.author)
+                        entry = Entry(file, self.bot.user)
                         entry.title = "Booting up..."
                         entry.channel = "DJPatrice"
                         entry.channel_url = "https://github.com/Kumkwats/my-discord-bot"
@@ -594,13 +598,13 @@ class Music(commands.Cog):
     @commands.command(aliases=['sk'])
     async def seek(self, context, timeCode: str = None):
         guild = context.guild.id
-        Queues[guild].voice_client = context.voice_client
+        #voiceClient = context.voice_client
 
         if guild not in Queues:
             return await context.send('Pas de lecture en cours')
 
         if timeCode is None:
-            return await context.send(embed=Help.get(context, 'music', 'info'))
+            return await context.send(embed=Help.get(context, 'music', 'seek'))
 
         currentEntry = Queues[guild].content[Queues[guild].cursor]
         if currentEntry.duration <= 0:
@@ -765,6 +769,21 @@ class Music(commands.Cog):
         else:
             return await context.send('L\'index %d n\'existe pas' % index)
     
+    async def removeGuild(self, id):
+        if not Queues[id].voice_client.is_connected():
+            print("wesh")
+            return
+        if Queues[id].voice_client.is_playing():
+            await Queues[id].voice_client.stop()
+        await asyncio.sleep(0.6)
+        await Queues[id].voice_client.disconnect()
+        print(("Guild (%d): Disconnected for inactivity" % (id)))
+
+        for entry in Queues[id].content:
+            if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
+                os.remove(config.downloadDirectory + entry.filename) #If running on Windows, the file currently playing is not erased
+        Queues.pop(id)
+
     #afk loop
     @tasks.loop(seconds=activityCheckDelta)
     async def musicTimeout(self):
@@ -780,16 +799,32 @@ class Music(commands.Cog):
                 print("Guild (%d): no voice" % (guild))
         if len(GuildsToDisconnect) > 0:
             for id in GuildsToDisconnect:
+
+                check, file = pickSoundFile("Leave")
+                if check:
+                    if file != "":
+                        player = discord.FFmpegPCMAudio(file, options="-vn")
+                        Queues[id].voice_client.play(player, after=lambda e: Queues[id].voice_client.loop.create_task(self.removeGuild(id)))
+                        return
+                    else:
+                        print("Aucun fichier trouvé pour le startup")
+                else:
+                    print("dossier Sounds inexistant")
+                    
+                while Queues[id].voice_client.is_playing():
+                    await asyncio.sleep(0.1)
+                    pass
+                await Queues[id].disconnect()
+
+                # print(("Guild (%d): Disconnected for inactivity" % (guild)))
+                # for entry in Queues[id].content:
+                #     if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
+                #         os.remove(config.downloadDirectory + entry.filename) #If running on Windows, the file currently playing is not erased
+                # Queues.pop(id)
+
                 # membersInVoice = len(Queues[guild].getVoiceChannel().members)
                 # if membersInVoice > 1:
                 #     await Queues[id].text_channel.send("Je m'en vais (ça fait au moins %d minutes qu'il n'y a plus de musique)" % (config.afkLeaveTime))
-                await Queues[id].disconnect()
-                print(("Guild (%d): Disconnected for inactivity" % (guild)))
-                for entry in Queues[id].content:
-                    if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
-                        os.remove(config.downloadDirectory + entry.filename) #If running on Windows, the file currently playing is not erased
-                Queues.pop(id)
-        
         
 def pickSoundFile(folderName):
     fPath = config.soundDirectory + folderName

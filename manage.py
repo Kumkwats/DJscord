@@ -54,7 +54,7 @@ class Manage(commands.Cog):
                 print("dossier sounds inexistant")
             
             while voiceClient.is_playing():
-                pass
+                await asyncio.sleep(0.5)
             await context.send("Bye bye")
             await voiceClient.disconnect()
         await context.send("*User has left the channel*")
