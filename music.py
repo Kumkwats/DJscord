@@ -4,8 +4,8 @@ import time
 import random
 
 import discord
+from discord import VoiceClient, VoiceChannel, TextChannel
 
-#from audioop import reverse
 from discord.ext import commands,tasks
 
 from youtube import Youtube
@@ -16,10 +16,10 @@ from config import config
 
 activityCheckDelta = 5 #number of seconds between every AFK check
 
-Queues = {}
+#Guilds = {}
 
-def time_format(seconds):
-    if seconds is not None:
+def time_format(seconds: int):
+    #if seconds is not None:
         seconds = int(seconds)
         h = seconds // 3600 % 24
         m = seconds % 3600 // 60
@@ -28,11 +28,11 @@ def time_format(seconds):
             return '{:02d}:{:02d}:{:02d}'.format(h, m, s)
         else:
             return '{:02d}:{:02d}'.format(m, s)
-    return None
+    #return None
 
 
 class Entry():
-    def __init__(self, filename, applicant, fileSize=0, playlist=None):
+    def __init__(self, filename, applicant: discord.User, fileSize=0, playlist = None):
         self.applicant = applicant
         self.filename = filename
         self.fileSize = fileSize
@@ -61,8 +61,8 @@ class Playlist():
 
 
 class Queue():
-    def __init__(self, voice_client, text_channel, repeat_mode="none"):
-        self.content = []
+    def __init__(self, voice_client: VoiceClient, text_channel: TextChannel):
+        self.content: list[Entry] = []
         self.size = 0
         self.cursor = 0
         self.starttime = 0
@@ -70,7 +70,7 @@ class Queue():
         self.lastVoiceActivityTime = time.time()
         self.voice_client = voice_client
         self.text_channel = text_channel
-        self.repeat_mode = repeat_mode  # none, entry, playlist, all
+        self.repeat_mode = "none"  # none, entry, playlist, all
         self.repeat_bypass = False
         self.seekTime = -1
 
@@ -78,23 +78,23 @@ class Queue():
         
 
     #Voice Channel
-    def getVoiceChannel(self):
+    def getVoiceChannel(self) -> VoiceChannel:
         return self.voice_client.channel
 
     #Voice Client
-    def isConnected(self):
+    def isConnected(self) -> bool:
         return self.voice_client.is_connected()
 
-    def isPlaying(self):
+    def isPlaying(self) -> bool:
         return self.voice_client.is_playing()
 
-    async def connect(self, voiceChannel):
+    async def connect(self, voiceChannel: VoiceChannel):
         self.voice_client = await voiceChannel.connect(timeout=600, reconnect=True)
         
     async def reconnect(self):
         self.voice_client = await self.voice_client.channel.connect(timeout=600, reconnect=True)
 
-    async def move(self, newVoiceChannel):
+    async def move(self, newVoiceChannel: VoiceChannel):
         await self.voice_client.move_to(newVoiceChannel)
 
     async def disconnect(self):
@@ -104,10 +104,10 @@ class Queue():
         self.lastVoiceActivityTime = time.time()
 
     #Text Channel
-    def checkTextChannel(self, textChannel): #preventing typing commands in other text channels
+    def checkTextChannel(self, textChannel: TextChannel) -> bool: #preventing typing commands in other text channels
         return self.text_channel == textChannel
 
-    def moveTextChannel(self, newTextChannel): #change listening text channel
+    def moveTextChannel(self, newTextChannel: TextChannel): #change listening text channel
         self.text_channel = newTextChannel
 
 
@@ -186,7 +186,7 @@ class Queue():
             except:
                 print("coro error")
 
-    async def addEntry(self, entry, position=None):
+    async def addEntry(self, entry: Entry, position=None):
         if position is None or position == self.size:
             self.content.append(entry)
         else:
@@ -197,20 +197,30 @@ class Queue():
 
         return position or self.size-1
 
-    def removeEntry(self, index):
+    def removeEntry(self, index: int):
         self.content.pop(index)
         self.size = self.size - 1
 
-    def moveEntry(self, frm, to):
+    def moveEntry(self, frm: int, to: int):
         entry = self.content[frm]
         self.content.pop(frm)
         self.content.insert(to, entry)
 
-    def getIndex(self, entry):
+    def getIndex(self, entry: Entry):
         return self.content.index(entry)
 
-    def getEntry(self, index):
+    def getEntry(self, index: int):
         return self.content[index]
+
+
+
+
+
+
+
+Queues: 'dict[int, Queue]' = {}
+
+
 
 
 class Music(commands.Cog):
@@ -220,7 +230,7 @@ class Music(commands.Cog):
             self.musicTimeout.start()
 
     @commands.command(aliases=['p', 'lire', 'jouer'])
-    async def play(self, context, *, query: str = None):
+    async def play(self, context: commands.Context, *, query: str = None):
         if query is None:
             return await context.send(embed=Help.get(context, 'music', 'play'))
 
@@ -382,7 +392,7 @@ class Music(commands.Cog):
                     print("not connected")
 
     @commands.command(aliases=['np', 'en lecture'])
-    async def nowplaying(self, context):
+    async def nowplaying(self, context: commands.Context):
         guild = context.guild.id
         if guild not in Queues or Queues[guild].cursor == Queues[guild].size:
             return await context.send('Rien en lecture')
@@ -390,7 +400,7 @@ class Music(commands.Cog):
             await self.info(context, Queues[guild].cursor)
 
     @commands.command(aliases=['i'])
-    async def info(self, context, index: int = None):
+    async def info(self, context: commands.Context, index: int = None):
         guild = context.guild.id
         Queues[guild].voice_client = context.voice_client
         if guild not in Queues:
@@ -449,7 +459,7 @@ class Music(commands.Cog):
             return await context.send('L\'index %d n\'existe pas' % (index))
 
     @commands.command(aliases=['q', 'file', 'dir', 'ls'])
-    async def queue(self, context, page:int = None):
+    async def queue(self, context: commands.Context, page:int = None):
         guild = context.guild.id
         if guild not in Queues:
             return await context.send('Aucune liste d\'attente')
@@ -528,7 +538,7 @@ class Music(commands.Cog):
         return await context.send(embed=embed)
 
     @commands.command(aliases=['mv', 'déplacer', 'bouge'])
-    async def move(self, context, frm: int = None, to: int = None):
+    async def move(self, context: commands.Context, frm: int = None, to: int = None):
         guild = context.guild.id
         if guild not in Queues:
             return await context.send('Aucune liste d\'attente')
@@ -547,7 +557,7 @@ class Music(commands.Cog):
             return await context.send('Une des deux positions est invalide')
 
     @commands.command(aliases=['rm', 'supprimer', 'enlever'])
-    async def remove(self, context, idx1: str = None, idx2: str = None):
+    async def remove(self, context: commands.Context, idx1: str = None, idx2: str = None):
         guild = context.guild.id
         Queues[guild].voice_client = context.voice_client
         if guild not in Queues:
@@ -596,7 +606,7 @@ class Music(commands.Cog):
             return await context.send("Les entrées commençant à %d jusqu'à %s ont bien été supprimés" % (idx1, "la fin de la liste" if idx2 == oldSize else str(idx2 - 1)))
 
     @commands.command(aliases=['sk'])
-    async def seek(self, context, timeCode: str = None):
+    async def seek(self, context: commands.Context, timeCode: str = None):
         guild = context.guild.id
         #voiceClient = context.voice_client
 
@@ -644,7 +654,7 @@ class Music(commands.Cog):
 
 
     @commands.command(aliases=['s', 'passer', 'next', 'suivant'])
-    async def skip(self, context):
+    async def skip(self, context: commands.Context):
         guild = context.guild.id
         #voiceClient = context.voice_client
 
@@ -659,7 +669,7 @@ class Music(commands.Cog):
             return await context.send('Aucune lecture en cours')
 
     @commands.command(aliases=['pauser', 'suspendre', 'sus', 'halte'])
-    async def pause(self, context):
+    async def pause(self, context: commands.Context):
         guild = context.guild.id
         #voiceClient = context.voice_client
         
@@ -674,7 +684,7 @@ class Music(commands.Cog):
             return await context.send('Aucune lecture en cours sur ce serveur')
 
     @commands.command(aliases=['reprendre'])
-    async def resume(self, context):
+    async def resume(self, context: commands.Context):
         guild = context.guild.id
         #voiceClient = context.voice_client
         
@@ -690,7 +700,7 @@ class Music(commands.Cog):
             return await context.send('Aucune lecture en cours sur ce serveur')
 
     @commands.command(aliases=['arreter', 'stopper', 'shutup', 'tg'])
-    async def stop(self, context):
+    async def stop(self, context: commands.Context):
         guild = context.guild.id
         #voiceClient = context.voice_client
         
@@ -705,9 +715,15 @@ class Music(commands.Cog):
             return await context.send("Je suis pas connecté sur ce serveur en fait !")
 
     @commands.command(aliases=['quitter', 'deconnexion', 'deco', 'ntm', 'l'])
-    async def leave(self, context):
+    async def leave(self, context: commands.Context):
         guild = context.guild.id
-        #voiceClient = context.voice_client
+
+        if guild not in Queues:
+            if(context.voice_client is not None):
+                context.voice_client.disconnect()
+                return await context.send('Ok bye!')
+            else:
+                return await context.send('Aucune liste d\'attente')
 
         if Queues[guild].voice_client is not None:
             if Queues[guild].voice_client.is_playing() and (context.author.voice is None or context.author.voice.channel != Queues[guild].voice_client.channel):
@@ -718,17 +734,17 @@ class Music(commands.Cog):
             if guild in Queues:
                 for entry in Queues[guild].content:
                     if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
-                        try:
-                            os.remove(config.downloadDirectory + entry.filename) # ATM (if running on Windows), the file currently playing will not be erased
-                        except:
-                            print("error remove")
+                        #try:
+                            os.remove(config.downloadDirectory + entry.filename) # If running on Windows), the file currently playing will not be erased
+                        #except:
+                            #print("Leave: error remove")
             Queues.pop(guild)
             return await context.send('Ok bye!')
         else:
             return await context.send('Je suis pas connecté en fait !')
 
     @commands.command(aliases=['r', 'repeter'])
-    async def repeat(self, context, mode: str = None):
+    async def repeat(self, context: commands.Context, mode: str = None):
         guild = context.guild.id
 
         if guild not in Queues:
@@ -749,12 +765,15 @@ class Music(commands.Cog):
         return await context.send('Le mode de répétition à été changé sur %s' % new_mode)
 
     @commands.command(aliases=['g', 'go', 'gt'])
-    async def goto(self, context, index: int = None):
+    async def goto(self, context: commands.Context, index: int = None):
         guild = context.guild.id
-        #voiceClient = context.voice_client
+        #print("Goto: [INFO] Invoked by user(%d) in guild(%d)" % (context.author().id, guild))
         if guild not in Queues:
             return await context.send('Aucune liste d\'attente')
-
+        if Queues[guild].voice_client is None:
+            #return await context.send('Une erreur est survenue... <@%d>' % (self.bot.owner_id))
+            print("Goto: [ERROR] guild(%d) has no VoiceClient")
+            return await context.send('Une erreur est survenue')
         if index is None:
             return await context.send(embed=Help.get(context, 'music', 'goto'))
 
@@ -768,35 +787,59 @@ class Music(commands.Cog):
             return  # await context.send('Direction la musique n°%d' % index)
         else:
             return await context.send('L\'index %d n\'existe pas' % index)
+
     
-    async def removeGuild(self, id):
-        if not Queues[id].voice_client.is_connected():
-            print("wesh")
+    async def removeGuild(self, id: int):
+        if id not in Queues:
+            print("RemoveGuild: [NO_ACTION] guild(%d) already removed" % (id))
             return
+
+        if Queues[id].voice_client is None:
+            print("RemoveGuild: [REMOVED] guild(%d) had no VoiceClient but is not connected" % (id))
+            Queues.pop(id)
+            return
+
+        if not Queues[id].voice_client.is_connected():
+            Queues.pop(id)
+            print("RemoveGuild: [REMOVED] guild(%d) has a VoiceClient but is not connected" % (id))
+            return
+
         if Queues[id].voice_client.is_playing():
             await Queues[id].voice_client.stop()
+            print("RemoveGuild: [ACTION] guild(%d) VoiceClient stoped" % (id))
         await asyncio.sleep(0.6)
+        
         await Queues[id].voice_client.disconnect()
-        print(("Guild (%d): Disconnected for inactivity" % (id)))
+        print("RemoveGuild: [ACTION] guild(%d) disconnected" % (id))
+        
 
         for entry in Queues[id].content:
             if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
-                os.remove(config.downloadDirectory + entry.filename) #If running on Windows, the file currently playing is not erased
+                try:
+                    os.remove(config.downloadDirectory + entry.filename) #If running on Windows, the file currently playing is not erased
+                except PermissionError :
+                    print("RemoveGuild: [EXCEPTION] PermissionError/Not allowed to remove file (%s)" % (config.downloadDirectory + entry.filename))
+        print("RemoveGuild: [REMOVED] guild(%d)" % (id))
         Queues.pop(id)
 
     #afk loop
     @tasks.loop(seconds=activityCheckDelta)
     async def musicTimeout(self):
         GuildsToDisconnect = []
+        
         for guild in Queues.keys():
-            if Queues[guild].voice_client is not None:
+            if Queues[guild].voice_client is None:
+                GuildsToDisconnect.append(guild)
+                print("Timeout: [INFO] Guild (%d) has no voice_client, will be removed" % (guild))
+            else:
                 if Queues[guild].isPlaying():
                     Queues[guild].voiceActivityUpdate()
                 else:
                     if time.time() - Queues[guild].lastVoiceActivityTime >= config.afkLeaveTime*60:
                         GuildsToDisconnect.append(guild)
-            else:
-                print("Guild (%d): no voice" % (guild))
+                        print("Timeout: [INFO] Guild (%d) has been inactive for too long, will be removed (AFK time = %d seconds)" % (guild, time.time() - Queues[guild].lastVoiceActivityTime))
+                        
+        
         if len(GuildsToDisconnect) > 0:
             for id in GuildsToDisconnect:
 
@@ -805,28 +848,24 @@ class Music(commands.Cog):
                     if file != "":
                         player = discord.FFmpegPCMAudio(file, options="-vn")
                         Queues[id].voice_client.play(player, after=lambda e: Queues[id].voice_client.loop.create_task(self.removeGuild(id)))
-                        return
                     else:
-                        print("Aucun fichier trouvé pour le startup")
+                        print("Timeout: No file in Leave folder")
                 else:
-                    print("dossier Sounds inexistant")
+                    print("PickSound: dossier Sounds inexistant")
                     
                 while Queues[id].voice_client.is_playing():
                     await asyncio.sleep(0.1)
-                    pass
-                await Queues[id].disconnect()
 
-                # print(("Guild (%d): Disconnected for inactivity" % (guild)))
-                # for entry in Queues[id].content:
-                #     if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
-                #         os.remove(config.downloadDirectory + entry.filename) #If running on Windows, the file currently playing is not erased
-                # Queues.pop(id)
+                await Queues[id].disconnect()
+                await self.removeGuild(id)
+                print(("Guild (%d): Disconnected for inactivity" % (guild)))
 
                 # membersInVoice = len(Queues[guild].getVoiceChannel().members)
                 # if membersInVoice > 1:
                 #     await Queues[id].text_channel.send("Je m'en vais (ça fait au moins %d minutes qu'il n'y a plus de musique)" % (config.afkLeaveTime))
-        
-def pickSoundFile(folderName):
+
+
+def pickSoundFile(folderName: str):
     fPath = config.soundDirectory + folderName
     if os.path.isdir(fPath):
         if len(os.listdir(fPath)) > 0:

@@ -9,6 +9,9 @@ from manage import Manage
 from debug import Debug
 from fun import Fun
 
+
+
+
 if config.FoxDotEnabled is True:
     from foxdot import Foxdot
 
@@ -25,18 +28,20 @@ if __name__ == "__main__":
     async def on_ready():
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=config.getPrefix()+"help"))
         print('Logged in as {0} ({0.id})'.format(bot.user))
-        print('------')
+        print('----------------')
 
     @bot.event
-    async def on_message(message):
+    async def on_message(message: discord.Message):
         if message.author.id == bot.user.id or message.author.bot:
             return
 
         if config.FoxDotEnabled is True:
             await Foxdot.send_command(message)
+
         await Fun.chocolatine(message)
 
         await bot.process_commands(message)
+    
 
     bot.add_cog(Music(bot))
     bot.add_cog(Fun(bot))
@@ -46,3 +51,12 @@ if __name__ == "__main__":
     if config.FoxDotEnabled is True:
         bot.add_cog(Foxdot(bot))
     bot.run(config.token)
+
+    # try:
+    #     AppInfo: discord.AppInfo = bot.application_info()
+    #     print(AppInfo)
+    #     bot.owner_id: int = AppInfo.owner.id
+    # except:
+    #     print("Error: unable to retrieve AppInfo")
+
+    

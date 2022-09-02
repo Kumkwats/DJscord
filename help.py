@@ -98,7 +98,7 @@ class Help(commands.Cog):
             color = 0x565493
         )
         last_update = datetime.fromtimestamp(int(os.path.getmtime(os.path.realpath(__file__))))
-        embed.set_footer(text = "Dernière mise à jour : %s" % last_update)
+        embed.set_footer(text = "Dernière mise à jour : %s UTC" % last_update)
 
         if query is None:
             for category in categories['description']:

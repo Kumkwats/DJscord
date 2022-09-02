@@ -7,9 +7,11 @@ class Config():
     @classmethod
     def readConfig(self):
         if os.path.isfile(CFGFILE):
+            print("Reading Config...")
             f = open(CFGFILE, 'r')
             self.conf = json.load(f)
             f.close()
+            
 
             print("Config: Will write and read files at those directories (relative to working dir):")
             
@@ -60,6 +62,7 @@ class Config():
             else:
                 print("Config: FoxDot is disabled")
 
+            print('----------------')
 
             self.token = self.conf['discord-token']
         else:
