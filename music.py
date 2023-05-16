@@ -6,7 +6,7 @@ import random
 import discord
 from discord import VoiceClient, VoiceChannel, TextChannel
 
-from discord.ext import commands,tasks
+from discord.ext import tasks, commands
 
 from youtube import Youtube
 from spotify import Spotify
@@ -216,88 +216,80 @@ class Queue():
 
 
 
-
-
 Queues: 'dict[int, Queue]' = {}
 
 
 
 
-class Music(commands.Cog):
-    def __init__(self, bot):
+class Music():
+    def __init__(self, bot: discord.Bot):
         self.bot = bot
         if config.afkLeaveActive:
             self.musicTimeout.start()
 
-    @commands.command(aliases=['p', 'lire', 'jouer'])
-    async def play(self, context: commands.Context, *, query: str = None):
-        if query is None:
-            return await context.send(embed=Help.get(context, 'music', 'play'))
+    async def play(self, ctx: discord.ApplicationContext, query: str):
+        await ctx.defer(ephemeral=True)
 
-        authorVoice = context.author.voice
-        #Queues[guild].voice_client = context.voice_client
-        authorText = context.channel
-
-        guild = context.guild.id
-
-
+        authorVoice = ctx.author.voice
         if authorVoice is None:
-            return await context.send("Vous n'êtes pas connectés à un salon vocal")
-        else:
-            if guild not in Queues:
-                print("Guild (%d): new connection to channel%s" % (guild, authorVoice.channel))
-                Queues[guild] = Queue(None, authorText)
-                Queues[guild].voice_client = await authorVoice.channel.connect(timeout=600, reconnect=True)
-                #Queues[guild] = Queue(Queues[guild].voice_client, authorText)
+            return await ctx.respond("Vous n'êtes pas connectés à un salon vocal", ephemeral=True)
+        
+        guild = ctx.guild.id
+        authorText = ctx.channel
 
-                #Only add the startup sound if there is no queue
-                check, file = pickSoundFile("Startup")
-                if check:
-                    if file != "":
-                        entry = Entry(file, self.bot.user)
-                        entry.title = "Booting up..."
-                        entry.channel = "DJPatrice"
-                        entry.channel_url = "https://github.com/Kumkwats/my-discord-bot"
-                        entry.duration = 0
-                        entry.album = None
-                        entry.thumbnail = "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/3ddaa372-c58c-4587-911e-1d625dff64dc/dapv26n-b138c16c-1cfc-45c3-9989-26fcd75d3060.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvM2RkYWEzNzItYzU4Yy00NTg3LTkxMWUtMWQ2MjVkZmY2NGRjXC9kYXB2MjZuLWIxMzhjMTZjLTFjZmMtNDVjMy05OTg5LTI2ZmNkNzVkMzA2MC5qcGcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.PnU42OFMHcio7nJ4a5Jsp8C-d6exHqd3vInU1682x1E"
-                        entry.url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        if guild not in Queues:
+            Queues[guild] = Queue(None, authorText)
+            Queues[guild].voice_client = await authorVoice.channel.connect(timeout=600, reconnect=True)
 
-                        queue = Queues[guild]
-                        await queue.addEntry(entry)
-                    else:
-                        print("Aucun fichier trouvé pour le startup")
+            print("Guild (%d): new connection to channel %s" % (guild, authorVoice.channel.name))
+
+            #Only add the startup sound if there is no queue
+            check, file = pickSoundFile("Startup")
+            if check:
+                if file != "":
+                    entry = Entry(file, self.bot.user)
+                    entry.title = "Booting up..."
+                    entry.channel = "DJPatrice"
+                    entry.channel_url = "https://github.com/Kumkwats/my-discord-bot"
+                    entry.duration = 0
+                    entry.album = None
+                    entry.thumbnail = "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/3ddaa372-c58c-4587-911e-1d625dff64dc/dapv26n-b138c16c-1cfc-45c3-9989-26fcd75d3060.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvM2RkYWEzNzItYzU4Yy00NTg3LTkxMWUtMWQ2MjVkZmY2NGRjXC9kYXB2MjZuLWIxMzhjMTZjLTFjZmMtNDVjMy05OTg5LTI2ZmNkNzVkMzA2MC5qcGcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.PnU42OFMHcio7nJ4a5Jsp8C-d6exHqd3vInU1682x1E"
+                    entry.url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+                    queue = Queues[guild]
+                    await queue.addEntry(entry)
+                    print("added to queue")
                 else:
-                    print("dossier Sounds inexistant")
+                    print("Aucun fichier trouvé pour le startup")
             else:
-                if not Queues[guild].voice_client.is_connected():
-                    print("Voice client is none")
-                    await Queues[guild].connect(authorVoice.channel)
-                    if Queues[guild].voice_client.is_connected():
-                        print("Voice client is reconnected")
-                    else:
-                        print("Voice client was unable to reconnect")
-                        Queues.pop(guild)
-                        return await context.send("Je n'ai pas réussi à me reconnecter...")
-                        
+                print("dossier Sounds inexistant")
+        else:
+            if not Queues[guild].voice_client.is_connected():
+                print("Voice client is none")
+                await Queues[guild].connect(authorVoice.channel)
+                if Queues[guild].voice_client.is_connected():
+                    print("Voice client is reconnected")
+                else:
+                    print("Voice client was unable to reconnect")
+                    Queues.pop(guild)
+                    return await ctx.respond("Je n'ai pas réussi à me reconnecter...", ephemeral=True)
+                    
 
-                        
-                if authorVoice.channel != Queues[guild].voice_client.channel:
-                    await Queues[guild].move(authorVoice.channel)
-                    # print("Guild (%d): moved to %s" % (guild, authorVoice.channel))
-            # print("Guild (%d): Connected to %s (number of members: %d)" % (guild, Queues[guild].voice_client.channel.name, len(Queues[guild].voice_client.channel.members)))
+            if authorVoice.channel != Queues[guild].voice_client.channel:
+                await Queues[guild].move(authorVoice.channel)
+
+                print("Guild (%d): moved to %s" % (guild, authorVoice.channel))
+        # print("Guild (%d): Connected to %s (number of members: %d)" % (guild, Queues[guild].voice_client.channel.name, len(Queues[guild].voice_client.channel.members)))
 
         queue = Queues[guild]
         entry = None
 
         if query.startswith("www."):
             query = "https://" + query
-            if context.author.id == 289086025442000896:
-                await context.send("Mael t'abuse à mettre des liens en www, mais j'accepte quand même")
 
         if query.startswith(("spotify:", "https://open.spotify.com/")):
             if not config.spotifyEnabled:
-                return await context.send('La recherche Spotify n\'a pas été configurée')
+                return await ctx.respond('La recherche Spotify n\'a pas été configurée')
             if query.startswith("https://open.spotify.com/"):
                 query = query[len("https://open.spotify.com/"):].replace('/', ':')
             else:
@@ -310,19 +302,19 @@ class Music(commands.Cog):
                     track = Spotify.getTrack(_id)
                     query = "%s %s" % (track['name'], track['artists'][0]['name'])
                 elif _type == 'playlist':
-                    return await context.send('Fonction non prise en charge pour le moment')
+                    return await ctx.respond('Fonction non prise en charge pour le moment', ephemeral=True)
             except:
-                return await context.send('Le lien n\'est pas valide')
+                return await ctx.respond('Le lien n\'est pas valide', ephemeral=True)
 
         if (query.startswith("http") or query.startswith("udp://")) and not query.startswith(("https://youtu.be", "https://www.youtube.com", "https://youtube.com")):
             # Other streams
-            entry = Entry(query, context.author)
+            entry = Entry(query, ctx.author)
             position = await queue.addEntry(entry)
-            await context.send("%d: %s a été ajouté à la file d\'attente" % (position, query))
+            return await ctx.send("%d: %s a été ajouté à la file d\'attente" % (position, query), ephemeral=True)
         else:
             # Search YouTube
             if not query.startswith("https://"):
-                message = await context.send("Recherche de \"%s\"..." % query)
+                message: discord.WebhookMessage = await ctx.respond("Recherche de \"%s\"..." % query, ephemeral=True)
                 try:
                     result = await Youtube.searchVideos(query)
                 except:
@@ -330,16 +322,16 @@ class Music(commands.Cog):
                 url = result["link"]
                 # print(url)
             else:
-                message = await context.send("Investigation sur \"%s\"..." % query[8:])
+                message: discord.WebhookMessage = await ctx.respond("Investigation sur \"%s\"..." % query[8:], ephemeral=True)
                 url = query
 
             try:
                 data = await Youtube.fetchData(url, self.bot.loop)
                 print(data['webpage_url'])
             except:
-                return await context.send('Le lien n\'est pas valide')
+                return await message.edit('Le lien n\'est pas valide')
 
-            applicant = context.author
+            applicant = ctx.author
             if 'entries' in data:
                 playlist = Playlist()
                 playlist.buildMetadataYoutube(data)
@@ -378,36 +370,33 @@ class Music(commands.Cog):
                     try:
                         filename = Youtube.getFilename(data)
                         text = "Téléchargement de %s..." % data['title']
-                        await Youtube.downloadAudio(data['webpage_url'], message, text, self.bot.loop),
+                        await Youtube.downloadAudio(data['webpage_url'], message, text, self.bot.loop)
+                        fileSize = os.path.getsize(config.downloadDirectory + filename)
                     except:
                         return await message.edit(content="Erreur lors du téléchargement de %s" % data['title'])
-                    fileSize = os.path.getsize(config.downloadDirectory + filename)
+                    
 
                 if Queues[guild].voice_client.is_connected():
                     entry = Entry(filename, applicant, fileSize)
                     entry.buildMetadataYoutube(data)
                     position = await queue.addEntry(entry)
                     await message.edit(content="%d: %s a été ajouté à la file d\'attente" % (position, data['title']))
+                    await ctx.send(f"{ctx.author.display_name} a ajouté une musique…")
                 else:
                     print("not connected")
 
-    @commands.command(aliases=['np', 'en lecture'])
-    async def nowplaying(self, context: commands.Context):
-        guild = context.guild.id
+    async def nowplaying(self, ctx: discord.ApplicationContext):
+        guild = ctx.guild.id
         if guild not in Queues or Queues[guild].cursor == Queues[guild].size:
-            return await context.send('Rien en lecture')
+            return await ctx.respond('Rien en lecture', ephemeral=True)
         else:
-            await self.info(context, Queues[guild].cursor)
+            await self.info(ctx, Queues[guild].cursor)
 
-    @commands.command(aliases=['i'])
-    async def info(self, context: commands.Context, index: int = None):
-        guild = context.guild.id
-        Queues[guild].voice_client = context.voice_client
+    async def info(self, ctx: discord.ApplicationContext, index: int):
+        guild = ctx.guild.id
+        Queues[guild].voice_client = ctx.voice_client
         if guild not in Queues:
-            return await context.send('Aucune liste d\'attente')
-
-        if index is None:
-            return await context.send(embed=Help.get(context, 'music', 'info'))
+            return await ctx.respond('Aucune liste d\'attente', ephemeral=True)
 
         if index < Queues[guild].size and index >= 0:
             entry = Queues[guild].content[index]
@@ -429,7 +418,6 @@ class Music(commands.Cog):
                         else:
                             content += "─"
                     content += "] (%s%s)\n" % (int((current/entry.duration)*100),'%')
-
 
             if entry.album is not None:
                 content += "Album : %s\n" % (entry.album)
@@ -454,15 +442,14 @@ class Music(commands.Cog):
             #embed.set_thumbnail(url=self.bot.user.avatar.url)
             embed.set_footer(text="Demandé par %s" % entry.applicant.display_name, icon_url = entry.applicant.display_avatar.url)
 
-            return await context.send(embed=embed)
+            return await ctx.respond(embed=embed)
         else:
-            return await context.send('L\'index %d n\'existe pas' % (index))
+            return await ctx.respond('L\'index %d n\'existe pas' % (index), ephemeral=True)
 
-    @commands.command(aliases=['q', 'file', 'dir', 'ls'])
-    async def queue(self, context: commands.Context, page:int = None):
-        guild = context.guild.id
+    async def queue(self, ctx: discord.ApplicationContext, page:int = None):
+        guild = ctx.guild.id
         if guild not in Queues:
-            return await context.send('Aucune liste d\'attente')
+            return await ctx.respond('Aucune liste d\'attente', ephemeral=True)
 
         totalDuration = 0
         totalSize = 0
@@ -476,10 +463,9 @@ class Music(commands.Cog):
         if page is None:
             printMin = max(Queues[guild].cursor - printSize // 2, 0)
             printMax = min(printMin + printSize, Queues[guild].size)
-            
         else:
             if (page - 1) * printSize > Queues[guild].size or page < 1:
-                return await context.send('Index de page invalide')
+                return await ctx.respond('Index de page invalide', ephemeral=True)
             
             printMin = (page - 1)*printSize
             printMax = min(printMin + printSize, Queues[guild].size)
@@ -535,41 +521,31 @@ class Music(commands.Cog):
         embed.set_author(name = "Liste de lecture", icon_url = self.bot.user.avatar.url)
         embed.set_footer(text = footerText)
 
-        return await context.send(embed=embed)
+        return await ctx.respond(embed=embed)
 
-    @commands.command(aliases=['mv', 'déplacer', 'bouge'])
-    async def move(self, context: commands.Context, frm: int = None, to: int = None):
-        guild = context.guild.id
+    async def move(self, ctx: discord.ApplicationContext, frm: int, to: int):
+        guild = ctx.guild.id
         if guild not in Queues:
-            return await context.send('Aucune liste d\'attente')
-
-        if frm is None or to is None:
-            return await context.send(embed=Help.get(context, 'music' 'move'))
+            return await ctx.respond('Aucune liste d\'attente', ephemeral=True)
 
         if frm == to:
-            return await context.send('La destination ne peut pas être égale à la source')
+            return await ctx.respond('La destination ne peut pas être égale à la source', ephemeral=True)
 
         if frm < Queues[guild].size and frm >= 0 and to < Queues[guild].size and to >= 0:
             title = Queues[guild].getEntry(frm).title
             Queues[guild].moveEntry(frm, to)
-            return await context.send('%s a été déplacé de %d vers %d' % (title, frm, to))
+            return await ctx.respond('%s a été déplacé de %d vers %d' % (title, frm, to))
         else:
-            return await context.send('Une des deux positions est invalide')
+            return await ctx.respond('Une des deux positions est invalide', ephemeral=True)
 
-    @commands.command(aliases=['rm', 'supprimer', 'enlever'])
-    async def remove(self, context: commands.Context, idx1: str = None, idx2: str = None):
-        guild = context.guild.id
-        Queues[guild].voice_client = context.voice_client
+    async def remove(self, ctx: discord.ApplicationContext, idx1: int, idx2: int = None):
+        guild = ctx.guild.id
+        Queues[guild].voice_client = ctx.voice_client
         if guild not in Queues:
-            return await context.send('Aucune liste d\'attente')
-
-        if idx1.isdigit():
-            idx1 = int(idx1)
-        else:
-            return await context.send(embed=Help.get(context, 'music', 'remove'))
+            return await ctx.respond('Aucune liste d\'attente', ephemeral=True)
                     
         if idx1 >= Queues[guild].size or idx1 < 0:
-            return await context.send('L\'index 1 (%d) n\'existe pas dans la queue' % (idx1))
+            return await ctx.respond('L\'index 1 (%d) n\'existe pas dans la queue' % (idx1), ephemeral=True)
         
         if idx2 is None: # remove one entry
             entry = Queues[guild].getEntry(idx1)
@@ -580,20 +556,13 @@ class Music(commands.Cog):
                 Queues[guild].cursor -= 1
             if entry.filename in os.listdir(config.downloadDirectory):
                 os.remove(config.downloadDirectory + entry.filename)
-            return await context.send('%s a bien été supprimé' % (entry.title))
+            return await ctx.respond('%s a bien été supprimé' % (entry.title))
         else: # remove multiple entries
-            if idx2.isdigit():
-                idx2 = int(idx2) + 1
-            elif idx2 == "-":
-                idx2 = Queues[guild].size
-            else:
-                return await context.send(embed=Help.get(context, 'music', 'remove'))
-
             oldSize = Queues[guild].size
             if idx2 > oldSize or idx2 < 0:
-                return await context.send('L\'index 2 (%d) n\'existe pas dans la queue' % (idx1))
+                return await ctx.respond('L\'index 2 (%d) n\'existe pas dans la queue' % (idx1), ephemeral=True)
             if idx1 > (idx2 - 1):
-                return await context.send("Attention à l'ordre des index !")
+                return await ctx.respond("Attention à l'ordre des index !", ephemeral=True)
             if idx1 <= Queues[guild].cursor <= idx2 - 1:
                 Queues[guild].voice_client.stop()
             for i in range(idx2 - idx1):
@@ -603,75 +572,64 @@ class Music(commands.Cog):
                     Queues[guild].cursor -= 1
                 if entry.filename in os.listdir(config.downloadDirectory):
                     os.remove(config.downloadDirectory + entry.filename)
-            return await context.send("Les entrées commençant à %d jusqu'à %s ont bien été supprimés" % (idx1, "la fin de la liste" if idx2 == oldSize else str(idx2 - 1)))
+            return await ctx.respond("Les entrées commençant à %d jusqu'à %s ont bien été supprimés" % (idx1, "la fin de la liste" if idx2 == oldSize else str(idx2 - 1)))
 
-    @commands.command(aliases=['sk'])
-    async def seek(self, context: commands.Context, timeCode: str = None):
-        guild = context.guild.id
-        #voiceClient = context.voice_client
+    async def seek(self, ctx: discord.ApplicationContext, timeCode: str = None):
+        guild = ctx.guild.id
 
         if guild not in Queues:
-            return await context.send('Pas de lecture en cours')
-
-        if timeCode is None:
-            return await context.send(embed=Help.get(context, 'music', 'seek'))
+            return await ctx.respond('Pas de lecture en cours', ephemeral=True)
 
         currentEntry = Queues[guild].content[Queues[guild].cursor]
         if currentEntry.duration <= 0:
-            return await context.send("Ce morceau n'est pas seekable")
+            return await ctx.respond("Ce morceau n'est pas seekable", ephemeral=True)
 
         #Decoding timeCode
-        if timeCode is not None:
-            try:
-                time = list(map(int, timeCode.split(":")))[::-1]
-            except:
-                return await context.send("Quelque chose ne va pas dans la syntaxe (doit être hh:mm:ss ou mmmm:ss ou bien ssss)")
-        else:
-            return await context.send(embed=Help.get(context, 'music', 'play'))
+        try:
+            time = list(map(int, timeCode.split(":")))[::-1]
+        except:
+            return await ctx.respond("Quelque chose ne va pas dans la syntaxe (doit être hh:mm:ss ou mmmm:ss ou bien ssss)", ephemeral=True)
         (secs, mins, hrs) = (0,0,0)
         secs = time[0]
         if len(time) > 1:
             if 0 <= secs < 60:
                 mins = time[1]
-            else:
-                return await context.send("Le temps n'est pas conforme")
+            else: #TODO specify error
+                return await ctx.respond("Le temps n'est pas conforme", ephemeral=True)
             if len(time) > 2:
                 if  0 <= mins < 60:
                     hrs = time[2]
                 else:
-                    return await context.send("Le temps n'est pas conforme")
+                    return await ctx.respond("Le temps n'est pas conforme", ephemeral=True)
                 if hrs < 0:
-                    return await context.send("Le temps n'est pas conforme")
+                    return await ctx.respond("Le temps n'est pas conforme", ephemeral=True)
         desiredStart = secs + 60*mins + 60*60*hrs
         
         if 0 <= desiredStart < currentEntry.duration -1:
             Queues[guild].repeat_bypass = True
             Queues[guild].seekTime = desiredStart
             Queues[guild].voice_client.stop()
+            return await ctx.respond(f"Utilisation de seek !") #TODO better response
         else:
-            return await context.send("La vidéo sera déjà finie à %s..." % (time_format(desiredStart)))
-        
+            return await ctx.respond("La vidéo sera déjà finie à %s..." % (time_format(desiredStart)), ephemeral=True)
 
-
-    @commands.command(aliases=['s', 'passer', 'next', 'suivant'])
-    async def skip(self, context: commands.Context):
-        guild = context.guild.id
-        #voiceClient = context.voice_client
+    async def skip(self, ctx: discord.ApplicationContext):
+        guild = ctx.guild.id
 
         if guild in Queues:
             if Queues[guild].cursor < Queues[guild].size:
                 Queues[guild].repeat_bypass = True
                 Queues[guild].cursor = Queues[guild].cursor + 1
                 Queues[guild].voice_client.stop()
+                return await ctx.respond("Skip")
             else:
-                return await context.send('Rien à passer')
+                return await ctx.respond('Rien à passer', ephemeral=True)
         else:
-            return await context.send('Aucune lecture en cours')
+            return await ctx.respond('Aucune lecture en cours', ephemeral=True)
 
-    @commands.command(aliases=['pauser', 'suspendre', 'sus', 'halte'])
+    #TODO
     async def pause(self, context: commands.Context):
         guild = context.guild.id
-        #voiceClient = context.voice_client
         
         if guild in Queues:
             if Queues[guild].voice_client.is_playing():
@@ -683,7 +641,7 @@ class Music(commands.Cog):
         else:
             return await context.send('Aucune lecture en cours sur ce serveur')
 
-    @commands.command(aliases=['reprendre'])
+    #TODO
     async def resume(self, context: commands.Context):
         guild = context.guild.id
         #voiceClient = context.voice_client
@@ -699,35 +657,32 @@ class Music(commands.Cog):
         else:
             return await context.send('Aucune lecture en cours sur ce serveur')
 
-    @commands.command(aliases=['arreter', 'stopper', 'shutup', 'tg'])
-    async def stop(self, context: commands.Context):
-        guild = context.guild.id
-        #voiceClient = context.voice_client
+    async def stop(self, ctx: discord.ApplicationContext):
+        guild = ctx.guild.id
         
         if Queues[guild].voice_client is not None:
             if Queues[guild].voice_client.is_playing or Queues[guild].voice_client.is_paused:
-                if context.author.voice is None or context.author.voice.channel != Queues[guild].voice_client.channel:
-                    return await context.send("Je suis en train de jouer de la musique là, viens me le dire en face !")
+                if ctx.author.voice is None or ctx.author.voice.channel != Queues[guild].voice_client.channel:
+                    return await ctx.respond("Je suis en train de jouer de la musique là, viens me le dire en face !", ephemeral=True)
                 Queues[guild].repeat_bypass = True
                 Queues[guild].voice_client.stop()
-                return await context.send("Ok j'arrête de lire la musique :(")
+                return await ctx.respond("Ok j'arrête de lire la musique :(")
         else:
-            return await context.send("Je suis pas connecté sur ce serveur en fait !")
+            return await ctx.respond("Je suis pas connecté sur ce serveur en fait !", ephemeral=True)
 
-    @commands.command(aliases=['quitter', 'deconnexion', 'deco', 'ntm', 'l'])
-    async def leave(self, context: commands.Context):
-        guild = context.guild.id
+    async def leave(self, ctx: discord.ApplicationContext):
+        guild = ctx.guild.id
 
         if guild not in Queues:
-            if(context.voice_client is not None):
-                context.voice_client.disconnect()
-                return await context.send('Ok bye!')
+            if(ctx.voice_client is not None):
+                ctx.voice_client.disconnect()
+                return await ctx.respond('Ok bye!')
             else:
-                return await context.send('Aucune liste d\'attente')
+                return await ctx.respond('Aucune liste d\'attente', ephemeral=True)
 
         if Queues[guild].voice_client is not None:
-            if Queues[guild].voice_client.is_playing() and (context.author.voice is None or context.author.voice.channel != Queues[guild].voice_client.channel):
-                return await context.send("Je suis en train de jouer de la musique là, viens me le dire en face !")
+            if Queues[guild].voice_client.is_playing() and (ctx.author.voice is None or ctx.author.voice.channel != Queues[guild].voice_client.channel):
+                return await ctx.respond("Je suis en train de jouer de la musique là, viens me le dire en face !")
             Queues[guild].voice_client.stop()
             Queues[guild].voice_client.cleanup()
             await Queues[guild].voice_client.disconnect()
@@ -739,43 +694,35 @@ class Music(commands.Cog):
                         #except:
                             #print("Leave: error remove")
             Queues.pop(guild)
-            return await context.send('Ok bye!')
+            return await ctx.respond('Ok bye!')
         else:
-            return await context.send('Je suis pas connecté en fait !')
+            return await ctx.respond('Je suis pas connecté en fait !')
 
-    @commands.command(aliases=['r', 'repeter'])
-    async def repeat(self, context: commands.Context, mode: str = None):
-        guild = context.guild.id
+    async def repeat(self, ctx: discord.ApplicationContext, mode: str):
+        guild = ctx.guild.id
 
         if guild not in Queues:
-            return await context.send('Aucune liste d\'attente')
+            return await ctx.respond('Aucune liste d\'attente', ephemeral=True)
 
         repeat_modes = ["none", "entry", "all", "playlist"]
         if mode is not None:
-            if mode not in repeat_modes:
-                return await context.send(embed=Help.get(context, 'music', 'repeat'))
-            else:
-                new_mode = mode
-                Queues[guild].repeat_mode = new_mode
+            new_mode = mode
+            Queues[guild].repeat_mode = new_mode
         else:
             old_mode = Queues[guild].repeat_mode
             new_mode = repeat_modes[(repeat_modes.index(old_mode) + 1) % len(repeat_modes)]
             Queues[guild].repeat_mode = new_mode
 
-        return await context.send('Le mode de répétition à été changé sur %s' % new_mode)
+        return await ctx.respond('Le mode de répétition à été changé sur %s' % new_mode)
 
-    @commands.command(aliases=['g', 'go', 'gt'])
-    async def goto(self, context: commands.Context, index: int = None):
-        guild = context.guild.id
+    async def goto(self, ctx: discord.ApplicationContext, index: int):
+        guild = ctx.guild.id
         #print("Goto: [INFO] Invoked by user(%d) in guild(%d)" % (context.author().id, guild))
         if guild not in Queues:
-            return await context.send('Aucune liste d\'attente')
+            return await ctx.respond('Aucune liste d\'attente', ephemeral=True)
         if Queues[guild].voice_client is None:
-            #return await context.send('Une erreur est survenue... <@%d>' % (self.bot.owner_id))
             print("Goto: [ERROR] guild(%d) has no VoiceClient")
-            return await context.send('Une erreur est survenue')
-        if index is None:
-            return await context.send(embed=Help.get(context, 'music', 'goto'))
+            return await ctx.respond('Une erreur est survenue', ephemeral=True)
 
         if index < Queues[guild].size and index >= 0:
             Queues[guild].cursor = index
@@ -784,10 +731,9 @@ class Music(commands.Cog):
                 Queues[guild].voice_client.stop()
             else:
                 await Queues[guild].startPlayback()
-            return  # await context.send('Direction la musique n°%d' % index)
+            return  await ctx.respond(f"Direction la musique n°{index}")
         else:
-            return await context.send('L\'index %d n\'existe pas' % index)
-
+            return await ctx.respond('L\'index %d n\'existe pas' % index, ephemeral=True)
     
     async def removeGuild(self, id: int):
         if id not in Queues:
@@ -860,12 +806,8 @@ class Music(commands.Cog):
                 await self.removeGuild(id)
                 print(("Guild (%d): Disconnected for inactivity" % (guild)))
 
-                # membersInVoice = len(Queues[guild].getVoiceChannel().members)
-                # if membersInVoice > 1:
-                #     await Queues[id].text_channel.send("Je m'en vais (ça fait au moins %d minutes qu'il n'y a plus de musique)" % (config.afkLeaveTime))
 
-
-def pickSoundFile(folderName: str):
+def pickSoundFile(folderName: str) -> tuple[bool, str]:
     fPath = config.soundDirectory + folderName
     if os.path.isdir(fPath):
         if len(os.listdir(fPath)) > 0:

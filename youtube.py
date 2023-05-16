@@ -53,15 +53,7 @@ class Youtube():
         print(filename)
         return filename
 
-    @classmethod
+    @classmethod #TODO try update hook
     async def downloadAudio(self, url, message, text, loop):
-        ydl.add_progress_hook(lambda d: self.downloadProgress(d, message, text, loop))
-        await loop.run_in_executor(None, lambda: ydl.download([url]))
-
-
-if __name__ == "__main__":
-    #data = asyncio.run(Youtube.fetchData("https://www.youtube.com/playlist?list=PLI_rLWXMqpSkAYfar0HRA7lykydwmRY_2"))
-    asyncio.run(Youtube.downloadAudio("https://www.youtube.com/watch?v=jIQ6UV2onyI", "lol"))
-    #f = open('ex.json', 'w')
-    # f.write(str(data))
-    # f.close()
+        # ydl.add_progress_hook(lambda d: self.downloadProgress(d, message, text, loop))
+        await loop.run_in_executor(None, lambda: ydl.download(url))
