@@ -11,8 +11,9 @@ if config.spotifyEnabled:
 
 
 class Spotify():
-    def getTrack(url):
-        return sp.track(url)
+    def getTrack(url: str):
+        trackID: str = url.split("?")[0]
+        return sp.track(trackID)
 
 
 if __name__ == "__main__":

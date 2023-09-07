@@ -19,7 +19,7 @@ if __name__ == "__main__":
     else:
         os.mkdir(config.downloadDirectory)
 
-    intents = discord.Intents()
+    intents = discord.Intents.default()
     intents.messages = True
     intents.message_content = True
 
