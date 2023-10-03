@@ -88,42 +88,42 @@ class Queue():
     def isPlaying(self) -> bool:
         return self.voice_client.is_playing()
 
-    async def connect(self, voiceChannel: VoiceChannel):
+    async def connect(self, voiceChannel: VoiceChannel) -> None:
         self.voice_client = await voiceChannel.connect(timeout=600, reconnect=True)
         
-    async def reconnect(self):
+    async def reconnect(self) -> None:
         self.voice_client = await self.voice_client.channel.connect(timeout=600, reconnect=True)
 
-    async def move(self, newVoiceChannel: VoiceChannel):
+    async def move(self, newVoiceChannel: VoiceChannel) -> None:
         await self.voice_client.move_to(newVoiceChannel)
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         await self.voice_client.disconnect()
 
-    def voiceActivityUpdate(self):
+    def voiceActivityUpdate(self) -> None:
         self.lastVoiceActivityTime = time.time()
 
     #Text Channel
     def checkTextChannel(self, textChannel: TextChannel) -> bool: #preventing typing commands in other text channels
         return self.text_channel == textChannel
 
-    def moveTextChannel(self, newTextChannel: TextChannel): #change listening text channel
+    def moveTextChannel(self, newTextChannel: TextChannel) -> None: #change listening text channel
         self.text_channel = newTextChannel
 
 
     #Playback
-    async def startPlayback(self, timestart = 0, supressOutput = False):
+    async def startPlayback(self, timestart: int = 0, supressOutput: bool = False):
         if self.voice_client.is_connected() and not self.voice_client.is_playing():
-            entry = self.content[self.cursor]
-            filename = config.downloadDirectory + entry.filename if entry.fileSize != 0 else entry.filename
+            entry: Entry = self.content[self.cursor]
+            filename: str = config.downloadDirectory + entry.filename if entry.fileSize != 0 else entry.filename
             #seek parameters
-            before = ""
+            before: str = ""
             if timestart > 0:
                 before = "-ss %d" % (timestart)
             else:
                 timestart = 0
 
-            player = discord.FFmpegPCMAudio(filename, before_options = before, options = "-vn")
+            player: discord.FFmpegPCMAudio = discord.FFmpegPCMAudio(filename, before_options = before, options = "-vn")
             self.voice_client.play(player, after=lambda e: self.nextEntry())
             self.starttime = time.time() - timestart
 
@@ -167,8 +167,8 @@ class Queue():
 
                 self.cursor = self.cursor + 1
         
-        noOutput = False
-        startingTime = 0
+        noOutput: bool = False
+        startingTime: int = 0
         if self.seekTime >= 0 and self.repeat_bypass is True:
             #noOutput = True
             startingTime = self.seekTime
@@ -186,7 +186,7 @@ class Queue():
             except:
                 print("coro error")
 
-    async def addEntry(self, entry: Entry, position=None):
+    async def addEntry(self, entry: Entry, position=None) -> int:
         if position is None or position == self.size:
             self.content.append(entry)
         else:
@@ -206,10 +206,10 @@ class Queue():
         self.content.pop(frm)
         self.content.insert(to, entry)
 
-    def getIndex(self, entry: Entry):
+    def getIndex(self, entry: Entry) -> int:
         return self.content.index(entry)
 
-    def getEntry(self, index: int):
+    def getEntry(self, index: int) -> Entry:
         return self.content[index]
 
 
@@ -258,7 +258,7 @@ class Music():
 
                     queue = Queues[guild]
                     await queue.addEntry(entry)
-                    print("added to queue")
+                    #print("added to queue")
                 else:
                     print("Aucun fichier trouvé pour le startup")
             else:
@@ -284,33 +284,39 @@ class Music():
         queue = Queues[guild]
         entry = None
 
+        # append https
         if query.startswith("www."):
             query = "https://" + query
 
+        # Spotify research
         if query.startswith(("spotify:", "https://open.spotify.com/")):
             if not config.spotifyEnabled:
                 return await ctx.respond('La recherche Spotify n\'a pas été configurée')
+            
             if query.startswith("https://open.spotify.com/"):
                 query = query[len("https://open.spotify.com/"):].replace('/', ':')
             else:
                 query = query[len("spotify:"):]
 
             try:
-                [_type, _id] = query.split(':')
-                # Spotify link
+                if(len(query.split(':')) == 2):
+                    [_type, _id] = query.split(':')
+                else:
+                    [_misc, _type, _id] = query.split(':')
+
                 if _type == 'track':
                     track = Spotify.getTrack(_id)
                     query = "%s %s" % (track['name'], track['artists'][0]['name'])
                 elif _type == 'playlist':
-                    return await ctx.respond('Fonction non prise en charge pour le moment', ephemeral=True)
+                    return await ctx.respond('Les playlists Spotify ne sont pas pris en charge', ephemeral=True)
             except:
                 return await ctx.respond('Le lien n\'est pas valide', ephemeral=True)
 
+        # Other streams
         if (query.startswith("http") or query.startswith("udp://")) and not query.startswith(("https://youtu.be", "https://www.youtube.com", "https://youtube.com")):
-            # Other streams
             entry = Entry(query, ctx.author)
             position = await queue.addEntry(entry)
-            return await ctx.send("%d: %s a été ajouté à la file d\'attente" % (position, query), ephemeral=True)
+            return await ctx.respond("%d: %s a été ajouté à la file d\'attente" % (position, query), ephemeral=True)
         else:
             # Search YouTube
             if not query.startswith("https://"):
@@ -394,10 +400,10 @@ class Music():
 
     async def info(self, ctx: discord.ApplicationContext, index: int):
         guild = ctx.guild.id
-        Queues[guild].voice_client = ctx.voice_client
         if guild not in Queues:
             return await ctx.respond('Aucune liste d\'attente', ephemeral=True)
 
+        Queues[guild].voice_client = ctx.voice_client
         if index < Queues[guild].size and index >= 0:
             entry = Queues[guild].content[index]
 
@@ -644,8 +650,6 @@ class Music():
     #TODO
     async def resume(self, context: commands.Context):
         guild = context.guild.id
-        #voiceClient = context.voice_client
-        
         if guild in Queues:
             if Queues[guild].voice_client.is_paused():
                 Queues[guild].voice_client.resume()
@@ -685,14 +689,13 @@ class Music():
                 return await ctx.respond("Je suis en train de jouer de la musique là, viens me le dire en face !")
             Queues[guild].voice_client.stop()
             Queues[guild].voice_client.cleanup()
-            await Queues[guild].voice_client.disconnect()
-            if guild in Queues:
-                for entry in Queues[guild].content:
-                    if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
-                        #try:
+            await Queues[guild].disconnect()
+            for entry in Queues[guild].content:
+                if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
+                        try:
                             os.remove(config.downloadDirectory + entry.filename) # If running on Windows), the file currently playing will not be erased
-                        #except:
-                            #print("Leave: error remove")
+                        except:
+                            print("Leave: error remove")
             Queues.pop(guild)
             return await ctx.respond('Ok bye!')
         else:
