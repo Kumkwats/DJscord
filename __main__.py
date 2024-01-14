@@ -40,16 +40,16 @@ if __name__ == "__main__":
 
     
     musicCog = Music(bot)
-    @bot.command(description="jouer musique")
+    @bot.command(description="Jouer musique")
     async def play(ctx: discord.ApplicationContext, recherche: str):
         await musicCog.play(ctx, recherche)
 
-    @bot.command(description="jouer musique")
+    @bot.command(description="Selection musique")
     async def goto(ctx: discord.ApplicationContext,
                    index: discord.Option(int, min_value=0)):
         await musicCog.goto(ctx, index)
 
-    @bot.command(description="passer musique")
+    @bot.command(description="Passer musique")
     async def skip(ctx: discord.ApplicationContext):
         await musicCog.skip(ctx)
 
@@ -59,53 +59,53 @@ if __name__ == "__main__":
 
     queue: discord.SlashCommandGroup = bot.create_group("queue", "OwO la queue")
 
-    @queue.command(name="page", description="affiche une page de la *queue*")
+    @queue.command(name="page", description="Affiche une page de la *queue*")
     async def qPage(ctx: discord.ApplicationContext,
                         page: discord.Option(int,
                                              description="id de la page",
                                              min_value=1)):
         await musicCog.queue(ctx, page)
 
-    @queue.command(name="current", description="affiche la *queue* autour de la lecture en cours")
+    @queue.command(name="current", description="Affiche la *queue* autour de la lecture en cours")
     async def qCurrent(ctx: discord.ApplicationContext):
-        await musicCog.queue(ctx, None)
+        await musicCog.queue(ctx)
 
-    @queue.command(description="déplace une musique")
-    async def move(ctx: discord.ApplicationContext,
+    @queue.command(name="move", description="Déplace une musique")
+    async def qMove(ctx: discord.ApplicationContext,
                    frm: discord.Option(int,
                                        name="from",
                                        min_value=0),
                    to: discord.Option(int, min_value=0)):
         await musicCog.move(ctx, frm, to)
 
-    @queue.command(description="enlève une musique")
-    async def remove(ctx: discord.ApplicationContext,
+    @queue.command(name="remove", description="Enlève une musique")
+    async def qRemove(ctx: discord.ApplicationContext,
                      index: discord.Option(int,
                                            min_value=0)):
         await musicCog.remove(ctx, index)
 
     #TODO: range - last
-    @queue.command(description="enlève des musiques")
-    async def remove_range(ctx: discord.ApplicationContext,
+    @queue.command(name="remove_range",description="Enlève **des** musiques")
+    async def qRemoveRange(ctx: discord.ApplicationContext,
                            start: discord.Option(int, min_value=0),
                            end: discord.Option(int, min_value=0)):
         await musicCog.remove(ctx, start, end)
 
-    @queue.command(description="affiche les infos pour la lecture en cours")
-    async def info(ctx: discord.ApplicationContext,
+    @queue.command(name="info", description="Affiche les infos pour une musique de la *queue*")
+    async def qInfo(ctx: discord.ApplicationContext,
                    index: discord.Option(int,
                                          description="numéro de la chanson dans la *queue*",
                                          min_value=0)):
         await musicCog.info(ctx, index)
 
 
-    @bot.command(description="affiche les infos pour la lecture en cours")
+    @bot.command(description="Affiche les infos pour la lecture en cours")
     async def nowplaying(ctx: discord.ApplicationContext):
-        await musicCog.nowplaying(ctx)    
+        await musicCog.nowplaying(ctx)
 
 
     #TODO description of timeCode
-    @bot.command(description="va a une partie spécifique de la musique")
+    @bot.command(description="Va a une partie spécifique de la musique")
     async def seek(ctx: discord.ApplicationContext, time_code: str):
         await musicCog.seek(ctx, time_code)
 
@@ -114,7 +114,7 @@ if __name__ == "__main__":
         await musicCog.leave(ctx)
 
 
-    @bot.command(description="choisir le mode de répétition")
+    @bot.command(description="Choisir le mode de répétition")
     async def repeat(ctx: discord.ApplicationContext,
                     mode: discord.Option(str, choices=["none", "entry", "playlist", "all"])):
         await musicCog.repeat(ctx, mode)

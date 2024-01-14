@@ -32,11 +32,11 @@ def time_format(seconds: int):
 
 
 class Entry():
-    def __init__(self, filename, applicant: discord.User, fileSize=0, playlist = None):
-        self.applicant = applicant
-        self.filename = filename
-        self.fileSize = fileSize
-        self.playlist = playlist
+    def __init__(self, filename: str, applicant: discord.User, fileSize = 0, playlist = None):
+        self.applicant: discord.User = applicant
+        self.filename: str = filename
+        self.fileSize: int = fileSize
+        self.playlist: Playlist = playlist
 
     def buildMetadataYoutube(self, data):
         self.title = data['title']
@@ -48,10 +48,14 @@ class Entry():
         self.id = data['id']
         self.url = data['webpage_url']
 
+    def BuildMetaDataOtherStreams(self, link: str):
+        self.title = link
+        self.url = link
+
 
 class Playlist():
     def buildMetadataYoutube(self, data):
-        self.title = data['title']
+        self.title: str = data['title']
         self.uploader = data['uploader'] if 'uploader' in data else None
         self.id = data['id']
         self.url = data['webpage_url']
@@ -73,9 +77,7 @@ class Queue():
         self.repeat_mode = "none"  # none, entry, playlist, all
         self.repeat_bypass = False
         self.seekTime = -1
-
-        #self.time = 0 #timeout
-        
+        self.isOtherSource: bool = False
 
     #Voice Channel
     def getVoiceChannel(self) -> VoiceChannel:
@@ -87,6 +89,9 @@ class Queue():
 
     def isPlaying(self) -> bool:
         return self.voice_client.is_playing()
+
+    def Stop(self) -> None:
+        self.voice_client.stop()
 
     async def connect(self, voiceChannel: VoiceChannel) -> None:
         self.voice_client = await voiceChannel.connect(timeout=600, reconnect=True)
@@ -186,6 +191,11 @@ class Queue():
             except:
                 print("coro error")
 
+    def PlayOther(self):
+        if(self.isPlaying):
+            self.isOtherSource = True
+        pass
+
     async def addEntry(self, entry: Entry, position=None) -> int:
         if position is None or position == self.size:
             self.content.append(entry)
@@ -231,13 +241,13 @@ class Music():
         await ctx.defer(ephemeral=True)
 
         authorVoice = ctx.author.voice
-        if authorVoice is None:
+        if authorVoice is None: # Not connected
             return await ctx.respond("Vous n'êtes pas connectés à un salon vocal", ephemeral=True)
         
         guild = ctx.guild.id
         authorText = ctx.channel
 
-        if guild not in Queues:
+        if guild not in Queues: #New Guild
             Queues[guild] = Queue(None, authorText)
             Queues[guild].voice_client = await authorVoice.channel.connect(timeout=600, reconnect=True)
 
@@ -263,7 +273,7 @@ class Music():
                     print("Aucun fichier trouvé pour le startup")
             else:
                 print("dossier Sounds inexistant")
-        else:
+        else: #Existing queue checks
             if not Queues[guild].voice_client.is_connected():
                 print("Voice client is none")
                 await Queues[guild].connect(authorVoice.channel)
@@ -284,12 +294,11 @@ class Music():
         queue = Queues[guild]
         entry = None
 
-        # append https
-        if query.startswith("www."):
+        if query.startswith("www."): #Append HTTPS to the link sent
             query = "https://" + query
 
-        # Spotify research
-        if query.startswith(("spotify:", "https://open.spotify.com/")):
+        
+        if query.startswith(("spotify:", "https://open.spotify.com/")): #Spotify research
             if not config.spotifyEnabled:
                 return await ctx.respond('La recherche Spotify n\'a pas été configurée')
             
@@ -315,10 +324,10 @@ class Music():
         # Other streams
         if (query.startswith("http") or query.startswith("udp://")) and not query.startswith(("https://youtu.be", "https://www.youtube.com", "https://youtube.com")):
             entry = Entry(query, ctx.author)
+            entry.BuildMetaDataOtherStreams(query)
             position = await queue.addEntry(entry)
             return await ctx.respond("%d: %s a été ajouté à la file d\'attente" % (position, query), ephemeral=True)
-        else:
-            # Search YouTube
+        else: #YouTube Search
             if not query.startswith("https://"):
                 message: discord.WebhookMessage = await ctx.respond("Recherche de \"%s\"..." % query, ephemeral=True)
                 try:
@@ -403,39 +412,42 @@ class Music():
         if guild not in Queues:
             return await ctx.respond('Aucune liste d\'attente', ephemeral=True)
 
-        Queues[guild].voice_client = ctx.voice_client
-        if index < Queues[guild].size and index >= 0:
+        #Queues[guild].voice_client = ctx.voice_client
+        
+        if index >= Queues[guild].size and index < 0:
+            return await ctx.respond('L\'index %d n\'existe pas' % (index), ephemeral=True)
+        else:
             entry = Queues[guild].content[index]
+            content = ""
+            if hasattr(entry, 'channel') and hasattr(entry, 'channel_url'): content += "Chaîne : [%s](%s)\n" % (entry.channel, entry.channel_url)
 
-            content = "Chaîne : [%s](%s)\n" % (entry.channel, entry.channel_url)
             if Queues[guild].cursor == index:
-                pause = "[Paused]" if Queues[guild].voice_client.is_paused() else ""
-                current = Queues[guild].pausetime - Queues[guild].starttime if Queues[guild].voice_client.is_paused() else time.time() - Queues[guild].starttime
+                pause: str = "[Paused]" if Queues[guild].voice_client.is_paused() else ""
+                current: float = Queues[guild].pausetime - Queues[guild].starttime if Queues[guild].voice_client.is_paused() else time.time() - Queues[guild].starttime
                 
-                if entry.duration == 0:
-                    content += "Progression : %s %s\n" % (time_format(current), pause)
-                else:
+                if not hasattr(entry, 'duration'): #Other Stream
+                    content += "Durée d'écoute : %s %s\n" % (time_format(current), pause)
+                else: #File
                     content += "Progression : %s/%s %s\n" % (time_format(current), time_format(entry.duration), pause)
+                    
+                    #Progress bar
                     progress = (current/entry.duration)*20
                     content += "["
                     for i in range(0,20):
-                        if int(progress) == i:
-                            content += "●"
-                        else:
-                            content += "─"
+                        if int(progress) == i: content += "●"
+                        else: content += "─"
                     content += "] (%s%s)\n" % (int((current/entry.duration)*100),'%')
 
-            if entry.album is not None:
-                content += "Album : %s\n" % (entry.album)
-            if entry.playlist is not None:
-                content += "Playlist : [%s](%s)\n" % (entry.playlist.title, entry.playlist.url)
+            if hasattr(entry, 'album'): content += "Album : %s\n" % (entry.album)
+            if hasattr(entry, 'playlist'):
+                if entry.playlist is not None : content += "Playlist : [%s](%s)\n" % (entry.playlist.title, entry.playlist.url)
             content += "Position : %d" % index
 
             embed = discord.Embed(
-                title=entry.title,
-                url=entry.url,
-                description=content,
-                color=0x565493
+                title = entry.title,
+                url = entry.url,
+                description = content,
+                color = 0x565493
             )
 
             if Queues[guild].cursor == index:
@@ -443,14 +455,13 @@ class Music():
                 name = bigPause + "\t" + (" En pause" if Queues[guild].voice_client.is_paused() else " En cours de lecture")
             else:
                 name = "Informations piste"
-            embed.set_author(name=name, icon_url = self.bot.user.display_avatar.url)
-            embed.set_image(url=entry.thumbnail)
+            embed.set_author(name = name, icon_url = self.bot.user.display_avatar.url)
+            if hasattr(entry, 'thumbnail'): embed.set_image(url = entry.thumbnail)
             #embed.set_thumbnail(url=self.bot.user.avatar.url)
-            embed.set_footer(text="Demandé par %s" % entry.applicant.display_name, icon_url = entry.applicant.display_avatar.url)
+            embed.set_footer(text = "Demandé par %s" % entry.applicant.display_name, icon_url = entry.applicant.display_avatar.url)
 
             return await ctx.respond(embed=embed)
-        else:
-            return await ctx.respond('L\'index %d n\'existe pas' % (index), ephemeral=True)
+            
 
     async def queue(self, ctx: discord.ApplicationContext, page:int = None):
         guild = ctx.guild.id
@@ -481,30 +492,51 @@ class Music():
         else:
             list += "⠀⠀⠀⠀…\n"
             
-        for i in range(printMin, printMax):
-            entry = Queues[guild].content[i]
+        for index in range(printMin, printMax):
+            entry: Entry = Queues[guild].content[index]
+            #Line variables
+            tab = ""
+
+            indicator = "\u2003\u2003"
+            if Queues[guild].cursor == index:
+                if Queues[guild].repeat_mode == "entry":
+                    indicator = "\u2002\u2006⟳\u2002"
+                else:
+                    indicator = "\u2003→\u2004"
+
+            title: str = entry.title
+            duration: int = 0
+            if hasattr(entry, 'duration'): duration = entry.duration
+
+            totalDuration += duration
+
+            # fileSize = ""
+            # if hasattr(entry, 'fileSize'): fileSize = entry.fileSize/1000000
+
+            
+            
+            current_playlist = ""
+
+            #TODO ???
             if entry.playlist is not None:
                 tab = "⠀⠀⠀⠀"
                 if entry.playlist.id != current_playlist:
                     current_playlist = entry.playlist.id
                     if Queues[guild].repeat_mode == "playlist":
-                        list += "⟳⠀"
+                        list += "⟳ ⠀"
                     else:
-                        list += "⠀⠀"
+                        list += "⠀⠀ "
                     list += " Playlist : %s\n" % entry.playlist.title
-            else:
-                tab = ""
-                current_playlist = ""
-            totalDuration += entry.duration
-            totalSize += entry.fileSize
-            indicator = "⠀⠀ "
-            if Queues[guild].cursor == i:
-                if Queues[guild].repeat_mode == "entry":
-                    indicator = "⟳⠀"
-                else:
-                    indicator = "→⠀"
+                
+            
+            
 
-            list += "%s%s%d: %s - %s - %.2fMo\n" % (tab, indicator, i, entry.title, time_format(entry.duration), entry.fileSize/1000000)
+            list += "%s%s%d: %s - %s\n" % (tab, indicator, index, title, time_format(duration))
+
+            
+            # totalSize += entry.fileSize
+
+
         if printMax == Queues[guild].size:
             list += "==== Fin de la file"
         else:
@@ -521,10 +553,16 @@ class Music():
             description=list,
             color=0x565493
         )
-        footerText = "Nombre d'entrées : %d | Mode de répétition : %s\nDurée totale : %s | Taille totale : %.2fMo" % (Queues[guild].size, repeat_text[Queues[guild].repeat_mode], time_format(totalDuration), totalSize/1000000)
+        # | Taille totale : %.2fMo .... , totalSize/1000000
+        footerText = "Nombre d'entrées : %d | Mode de répétition : %s\nDurée totale : %s " % (Queues[guild].size, repeat_text[Queues[guild].repeat_mode], time_format(totalDuration))
         if page is not None:
             footerText += "\nPage %d/%d" % (page, ((Queues[guild].size - 1) // printSize) + 1)
-        embed.set_author(name = "Liste de lecture", icon_url = self.bot.user.avatar.url)
+
+        if self.bot.user.avatar is None:
+            embed.set_author(name = "Liste de lecture")
+        else:    
+            embed.set_author(name = "Liste de lecture", icon_url = self.bot.user.avatar.url)
+
         embed.set_footer(text = footerText)
 
         return await ctx.respond(embed=embed)
