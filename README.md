@@ -1,6 +1,6 @@
-# dj-patrick
+# DJscord
 
-Made with Python 3.9  
+Made with Python 3.10  
 In alpha early development
 
 # Unique Features
@@ -10,7 +10,76 @@ In alpha early development
     * Possibility to loop within a playlist
     * Possibility to remove all songs in a playlist
 
-# Installation
+
+# Config file and the resources folder
+
+## Resources folder
+
+You may need to create a folder to store the resources that the bot may need
+
+## Config file
+The config is the most important file
+
+You can create a discord application by going here https://discord.com/developers/applications
+
+Here are the two lines that must be in the `config.json` file
+```json
+{
+    "prefix": "$",
+    "discord-token": "<token>"
+}
+```
+**You must put the config file at the root of the bot's resources folder.**
+
+If you want to enable adding music from spotify, add the following lines to the config.json to make it look like that  
+
+You can create a spotify application by going here https://developer.spotify.com/dashboard/applications
+```json
+{
+    "spotify-client-id": "<id>",
+    "spotify-client-secret": "<secret>"
+}
+```
+
+Other settings include:
+- `minutes-before-disconnecting` : Automaticaly disconnect the bot after n minutes without playing any sound 
+
+# Docker Installation
+
+The simplest way to run the bot is to run it in a docker container.
+
+
+
+## Build image
+
+First, we need to build the image.
+
+> You may need to use sudo to run docker commands
+
+```bash
+docker build . -t djscordbot:latest
+```
+
+
+
+## Run with mounted resources folder
+
+Mounting the resource folder is necessary as the config file and other resources files are not copied in the container. This allows to change the config file or add resources if needed without having to rebuild the image.
+
+```bash
+docker run -d --name djscordbot -v ./resources/:/app/resources djscordbot:latest
+```
+
+## Stop the container
+```bash
+docker stop djscordbot
+```
+
+
+
+
+
+# Default Installation
 
 ## Clone repo and install dependencies
 ```bash
@@ -25,30 +94,7 @@ It's recommended to run the python script as user on the system (not as root). Y
 sudo useradd -md /var/lib/dj-patrick dj-patrick
 ```
 
-## Create config file
-You can create a discord application by going here https://discord.com/developers/applications
-```json
-{
-    "prefix": "$",
-    "discord-token": "<token>"
-}
-```
-Put the json above in a config.json file in the following location using your favorite text editor (e.g. nano)
-```bash
-sudo -u dj-patrick nano /var/lib/dj-patrick/config.json
-```
 
-If you want to enable adding music from spotify, add the following lines to the config.json to make it look like that  
-
-You can create a spotify application by going here https://developer.spotify.com/dashboard/applications
-```json
-{
-    "prefix": "$",
-    "discord-token": "<token>",
-    "spotify-client-id": "<id>",
-    "spotify-client-secret": "<secret>"
-}
-```
 
 ## Run
 ```bash
@@ -66,7 +112,6 @@ sudo systemctl start dj-patrick
 ```
 
 ### Uninstall
-
 ```bash
 sudo systemctl disable dj-patrick
 sudo systemctl stop dj-patrick
@@ -74,16 +119,4 @@ sudo rm /etc/systemd/system/dj-patrick.service
 sudo systemctl daemon-reload
 sudo rm -r /opt/dj-patrick
 sudo rm -r /var/lib/dj-patrick
-```
-
-# (Optionnal) FoxDot installation
-
-## FoxDot
-```
-pip install FoxDot
-```
-
-## Jackd and Supercollider
-```bash
-apt install jackd supercollider alsa-utils
 ```

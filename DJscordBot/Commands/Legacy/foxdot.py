@@ -1,7 +1,8 @@
 from discord.ext import commands
 import socket
 import asyncio
-from config import config
+
+from DJscordBot.config import config
 
 BUFFER = 2048
 

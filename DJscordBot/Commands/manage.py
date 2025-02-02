@@ -1,10 +1,13 @@
 import os
-import discord
 import asyncio
+
+import discord
 from discord.channel import VoiceChannel
 from discord.ext import commands, bridge
-from config import config
-from music import Queues, pickSoundFile
+
+from DJscordBot.config import config
+from DJscordBot.utils import pick_sound_file
+from DJscordBot.Commands.music import Queues
 
 class Manage():
     def __init__(self, bot: discord.Bot):
@@ -29,7 +32,7 @@ class Manage():
                           "\n\t\t-Déconnexion automatique du bot (normalement actif mais non vérifié)" +
                           "\n\t\t-Recherche Spotify pas testé" +
                           "\n**Bugs connus:**\n\t\t-`/queue random_range` supprime jusqu'à `end - 1` au lieu de `end`" +
-                          "\n\nMais autrement TVB !\n||(@\Kkum si problème)||")
+                          "\n\nMais autrement TVB !\n||(@\\Kkum si problème)||")
         #await ctx.resopnd("Nan ça va tkt")
 
     # @commands.command() # TODO None type error quand pas dans le channel ?

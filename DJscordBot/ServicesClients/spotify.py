@@ -1,6 +1,7 @@
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
-from config import config
+
+from DJscordBot.config import config
 
 
 if config.spotifyEnabled:

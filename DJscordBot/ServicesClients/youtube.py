@@ -2,7 +2,9 @@ from youtubesearchpython.__future__ import VideosSearch
 import yt_dlp
 import asyncio
 import time
-from config import config
+import requests
+
+from DJscordBot.config import config
 
 # Suppress noise about console usage from errors
 yt_dlp.utils.bug_reports_message = lambda: ''
@@ -39,10 +41,43 @@ class Youtube():
                 asyncio.run_coroutine_threadsafe
                 loop.create_task(message.edit(content="%s [%.2f/%.2f Mo]" % (text, currentSize, downloadSize)))
 
-    async def searchVideos(query, nbEntries=1):
+    async def searchVideos_YSP(query, nbEntries=1):
         videosSearch = VideosSearch(query, limit=nbEntries)
         videosResult = await videosSearch.next()
+        print(videosResult["result"][0].keys)
         return videosResult["result"][0]
+
+    async def searchVideosYT_DLP(query, nbEntries=1):
+        try:
+            requests.get(query)
+        except:
+            video = ydl.extract_info(f"ytsearch:{query}", download=False)['entries'][0]
+        else:
+            video = ydl.extract_info(query, download=False)
+        
+
+        clearedInfo = {
+            "id" : video["id"],
+            "title" : video["title"],
+            "webpage_url" : video["webpage_url"],
+            "url" : video["url"],
+            "original_url" : video["original_url"],
+            "channel" : video["channel"],
+            "channel_follower_count" : video["channel_follower_count"],
+            "channel_id" : video["channel_id"],
+            "channel_url" : video["channel_url"],
+            "duration" : video["duration"],
+            "view_count" : video["view_count"],
+            "average_rating" : video["average_rating"],
+            "age_limit" : video["age_limit"],
+        }
+        #print(video.keys())
+        f = open(".debug", "w")
+        for s in video.keys():
+            f.write(f"{s} | {video[s]}\n")
+        f.close()
+
+        return video
 
     async def fetchData(url, loop):
         data = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=False))

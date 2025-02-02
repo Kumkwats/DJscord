@@ -1,7 +1,7 @@
 import os
 import json
 
-CFGFILE = "config.json"
+CFGFILE = "resources/config.json"
 
 class Config():
     @classmethod
@@ -12,27 +12,30 @@ class Config():
             self.conf = json.load(f)
             f.close()
             
+            if 'discord-token' not in self.conf:
+                print("Config: [ERR] No discord token provided. The bot can't work without a discord token")
+                return
 
             print("Config: Will write and read files at those directories (relative to working dir):")
             
-            self.downloadDirectory = "downloads/" # default downloads directory
-            if 'download-directory' in self.conf:
-                self.downloadDirectory = self.conf['download-directory']
-                if self.downloadDirectory[0:2] == "./": # when ./ is added it mess up with the filename for some reason
-                    self.downloadDirectory = self.downloadDirectory[2:]
-                if self.downloadDirectory[-1] != "/":
-                    self.downloadDirectory += "/"
+            self.downloadDirectory = "resources/downloads/" # default downloads directory
+            # if 'download-directory' in self.conf:
+            #     self.downloadDirectory = self.conf['download-directory']
+            #     if self.downloadDirectory[0:2] == "./": # when ./ is added it mess up with the filename for some reason
+            #         self.downloadDirectory = self.downloadDirectory[2:]
+            #     if self.downloadDirectory[-1] != "/":
+            #         self.downloadDirectory += "/"
 
             print("\tDownloaded files at: " + self.downloadDirectory)
 
 
-            self.soundDirectory = "sounds/" # default sounds directory
-            if 'sound-directory' in self.conf:
-                self.soundDirectory = self.conf['sound-directory']
-                if self.soundDirectory[0:2] == "./":
-                    self.soundDirectory = self.downloadDirectory[2:]
-                if self.soundDirectory[-1] != "/":
-                    self.soundDirectory += "/"
+            self.soundDirectory = "resources/sounds/" # default sounds directory
+            # if 'sound-directory' in self.conf:
+            #     self.soundDirectory = self.conf['sound-directory']
+            #     if self.soundDirectory[0:2] == "./":
+            #         self.soundDirectory = self.downloadDirectory[2:]
+            #     if self.soundDirectory[-1] != "/":
+            #         self.soundDirectory += "/"
             
             print("\tOther sound files at: " + self.soundDirectory)
 
@@ -55,18 +58,18 @@ class Config():
 
             
             
-            self.FoxDotEnabled = False
-            if "FoxDot-port" and "FoxDot-address" in self.conf:
-                self.FoxDotEnabled = True
-                print("Config: FoxDot is enabled")
-            else:
-                print("Config: FoxDot is disabled")
+            # self.FoxDotEnabled = False
+            # if "FoxDot-port" and "FoxDot-address" in self.conf:
+            #     self.FoxDotEnabled = True
+            #     print("Config: FoxDot is enabled")
+            # else:
+            #     print("Config: FoxDot is disabled")
 
             print('----------------')
 
             self.token = self.conf['discord-token']
         else:
-            print("ERR: Config file is missing (%s)" % CFGFILE)
+            print(f"Config: [ERR] Config file is missing {CFGFILE}")
             exit()
 
     @classmethod
