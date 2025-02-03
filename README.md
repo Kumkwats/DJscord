@@ -67,7 +67,7 @@ docker build . -t djscordbot:latest
 Mounting the resource folder is necessary as the config file and other resources files are not copied in the container. This allows to change the config file or add resources if needed without having to rebuild the image.
 
 ```bash
-docker run -d --name djscordbot -v ./resources/:/app/resources djscordbot:latest
+docker run -d --name djscordbot --restart unless-stopped -v ./resources/:/app/resources djscordbot:latest
 ```
 
 ## Stop the container

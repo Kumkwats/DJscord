@@ -12,7 +12,7 @@ from discord.ext import tasks, commands
 
 
 from DJscordBot.entities import Entry, Playlist, Queue
-from DJscordBot.utils import time_format
+from DJscordBot.utils import time_format, pick_sound_file
 from DJscordBot.config import config
 
 from DJscordBot.ServicesClients.youtube import Youtube
@@ -56,7 +56,7 @@ class Music():
             print(f"Guild ({guild}): new connection to channel {author_voice.channel.name}")
 
             #Only add the startup sound if there is no queue
-            check, file = pick_sound_file("Startup")
+            check, file = pick_sound_file("startup")
             if check:
                 if file != "":
                     entry = Entry(file, self.bot.user)
@@ -702,7 +702,7 @@ class Music():
         if len(guilds_to_disconnect) > 0:
             for guild_id in guilds_to_disconnect:
 
-                check, file = pick_sound_file("Leave")
+                check, file = pick_sound_file("leave")
                 if check:
                     if file != "":
                         player = discord.FFmpegPCMAudio(file, options="-vn")
