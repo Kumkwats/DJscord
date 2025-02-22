@@ -3,6 +3,7 @@ import yt_dlp
 import asyncio
 import time
 import requests
+import os
 
 from DJscordBot.config import config
 
@@ -41,11 +42,28 @@ class Youtube():
                 asyncio.run_coroutine_threadsafe
                 loop.create_task(message.edit(content="%s [%.2f/%.2f Mo]" % (text, currentSize, downloadSize)))
 
+
     async def searchVideos_YSP(query, nbEntries=1):
         videosSearch = VideosSearch(query, limit=nbEntries)
         videosResult = await videosSearch.next()
-        print(videosResult["result"][0].keys)
-        return videosResult["result"][0]
+        
+        video = videosResult["result"][0]
+
+        if config.debug:
+            if not os.path.isdir("./._debug"):
+                os.mkdir("._debug")
+            f = open(f"._debug/YT_DLP_{video['id']}-keys", "w")
+            f_all = open(f"._debug/YT_DLP_{video['id']}", "w")
+            for s in video.keys():
+                f.write(f"{s}\n")
+                f_all.write(f"{s} | {video[s]}\n")
+            f.close()
+            f_all.close()
+            print("[DEBUG] written search data keys: " + f".debug/YT_DLP_{video['id']}-keys")
+            print("[DEBUG] written search data: " + f".debug/YT_DLP_{video['id']}")
+
+        return video
+    
 
     async def searchVideosYT_DLP(query, nbEntries=1):
         try:
@@ -54,28 +72,20 @@ class Youtube():
             video = ydl.extract_info(f"ytsearch:{query}", download=False)['entries'][0]
         else:
             video = ydl.extract_info(query, download=False)
-        
 
-        clearedInfo = {
-            "id" : video["id"],
-            "title" : video["title"],
-            "webpage_url" : video["webpage_url"],
-            "url" : video["url"],
-            "original_url" : video["original_url"],
-            "channel" : video["channel"],
-            "channel_follower_count" : video["channel_follower_count"],
-            "channel_id" : video["channel_id"],
-            "channel_url" : video["channel_url"],
-            "duration" : video["duration"],
-            "view_count" : video["view_count"],
-            "average_rating" : video["average_rating"],
-            "age_limit" : video["age_limit"],
-        }
-        #print(video.keys())
-        f = open(".debug", "w")
-        for s in video.keys():
-            f.write(f"{s} | {video[s]}\n")
-        f.close()
+        if config.debug:
+            if not os.path.isdir("./._debug"):
+                os.mkdir("._debug")
+            f = open(f"._debug/YT_DLP_{video['id']}-keys", "w")
+            f_all = open(f"._debug/YT_DLP_{video['id']}", "w")
+            for s in video.keys():
+                f.write(f"{s}\n")
+                f_all.write(f"{s} | {video[s]}\n")
+            f.close()
+            f_all.close()
+            print("[DEBUG] written search data keys: " + f".debug/YT_DLP_{video['id']}-keys")
+            print("[DEBUG] written search data: " + f".debug/YT_DLP_{video['id']}")
+
 
         return video
 

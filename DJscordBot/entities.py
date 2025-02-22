@@ -2,6 +2,8 @@ import time
 import asyncio
 import traceback
 
+from enum import Enum
+
 import discord
 
 from DJscordBot.utils import time_format
@@ -10,26 +12,50 @@ from DJscordBot.metadatas import YoutubeMetadata
 from DJscordBot.config import config
 
 
+
+class NextEntryCondition(Enum):
+    DEFAULT = -1
+    SEEK = 1
+    SKIP = 2
+    STOP = 3
+    RESUME = 4
+
+
+
+
+
 class Entry():
     def __init__(self, filename: str, applicant: discord.User, fileSize = 0, playlist = None):
-        self.applicant: discord.User = applicant
         self.filename: str = filename
         self.file_size: int = fileSize
         
+        self.applicant: discord.User = applicant
+
         self.is_youtube: bool = False
         self.youtube_metadata: YoutubeMetadata = None
+        # self.is_spotify: bool = False
+        # self.spotify_metadata: SpotifyMetadata = None
         self.playlist: Playlist = playlist
+
 
     def buildMetadataYoutube(self, data):
         self.is_youtube = True
         self.title = data['title']
+        
+        self.view_count = data['view_count']
+        self.like_count = data['like_count']
+
         self.channel = data['channel']
         self.channel_url = data['channel_url']
-        self.album = data['album'] if 'album' in data else None
+        self.channel_follower_count = data['channel_follower_count']
+        
+        if 'album' in data:
+            self.album = data['album']
         self.duration = data['duration'] if self.file_size != 0 else 0
         self.thumbnail = data['thumbnail']
         self.id = data['id']
         self.url = data['webpage_url']
+
 
     def BuildMetaDataOtherStreams(self, link: str):
         self.title = link
@@ -43,12 +69,13 @@ class Playlist():
         self.id = data['id']
         self.url = data['webpage_url']
 
-    def buildMetadataSpotify(self, data):
-        pass
+    # def buildMetadataSpotify(self, data):
+    #     pass
 
 
 class Queue():
-    def __init__(self, voice_client: discord.VoiceClient, text_channel: discord.TextChannel):
+    def __init__(self, guild_id: int, voice_client: discord.VoiceClient, text_channel: discord.TextChannel):
+        self.guild_id: int = guild_id
         self.content: list[Entry] = []
         self.size = 0
         self.cursor = 0
@@ -61,6 +88,7 @@ class Queue():
         self.repeat_bypass = False
         self.seek_time = -1
         self.is_other_source: bool = False
+        self.next_entry_condition: NextEntryCondition = NextEntryCondition.DEFAULT
 
     #Voice Channel
     def get_voice_channel(self) -> discord.VoiceChannel:
@@ -115,21 +143,49 @@ class Queue():
                 timestart = 0
 
             player: discord.FFmpegPCMAudio = discord.FFmpegPCMAudio(
-                filename, 
+                filename,
                 before_options = before,
                 options = "-vn")
+            
             self.voice_client.play(
                 player,
-                after=lambda e: self.next_entry())
+                after=lambda e: self.on_after_play())
+            
             self.starttime = time.time() - timestart
 
             if not supress_output:
                 if timestart > 0:
-                    await self.text_channel.send(f"Déplacement du pointeur à **{time_format(timestart)}** dans la lecture en cours : {entry.title}")
+                    await self.text_channel.send(f"Déplacement du pointeur à **[{time_format(timestart)}]** dans la lecture en cours : {entry.title}")
                 else:
                     await self.text_channel.send(f"Maintenant en lecture : {entry.title}")
 
-    def next_entry(self):
+    def on_after_play(self):
+        if self.next_entry_condition is NextEntryCondition.SEEK:
+            print(f"[QUEUE.AFTER_PLAY] on_after_play >> seek (GID:{self.guild_id})")
+            return self.play_seek()
+        # elif self.next_entry_condition is NextEntryCondition.SKIP:
+        #     self.cursor
+        elif self.next_entry_condition is NextEntryCondition.STOP:
+            
+            #restore to defaults
+            self.next_entry_condition = NextEntryCondition.DEFAULT
+            self.seek_time = -1
+            self.repeat_bypass = False
+
+            print(f"[QUEUE.AFTER_PLAY] on_after_play >> stop (GID:{self.guild_id})")
+            return
+        # elif self.next_entry_condition is NextEntryCondition.RESUME:
+        #     pass
+        
+        print(f"[QUEUE.AFTER_PLAY] on_after_play >> next entry (GID:{self.guild_id})")
+        self.play_next()
+
+        self.next_entry_condition = NextEntryCondition.DEFAULT
+        self.seek_time = -1
+        self.repeat_bypass = False
+        pass
+
+    def play_next(self):
         if self.repeat_bypass is False:
             if self.repeat_mode == "none":
                 self.cursor = self.cursor + 1
@@ -162,25 +218,35 @@ class Queue():
                         gotostart()
 
                 self.cursor = self.cursor + 1
-        
-        no_output: bool = False
-        starting_time: int = 0
-        if self.seek_time >= 0 and self.repeat_bypass is True:
-            #noOutput = True
-            starting_time = self.seek_time
-            print(f"seeking entry at {self.seek_time} seconds")
-        else:
-            print("next entry")
 
+        # defaulting class variables for next uses
         self.seek_time = -1
         self.repeat_bypass = False
         if self.cursor < self.size:
-            coro = self.start_playback(timestart = starting_time, supress_output = no_output)
+            coro = self.start_playback()
             fut = asyncio.run_coroutine_threadsafe(coro, self.voice_client.loop)
             try:
                 fut.result()
             except Exception:
-                print(f"[ERROR] next_entry(): a coroutine error occured\n\n{traceback.format_exc()}")
+                print(f"[ERROR] play_next(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
+
+    def play_seek(self):
+        if self.seek_time < 0:
+            return self.play_next()
+        # setting variables
+        starting_time:int = self.seek_time
+
+        # defaulting class variables for next uses
+        self.seek_time = -1
+
+        if self.cursor < self.size:
+            coro = self.start_playback(timestart = starting_time)
+            fut = asyncio.run_coroutine_threadsafe(coro, self.voice_client.loop)
+            try:
+                fut.result()
+            except Exception:
+                print(f"[ERROR] play_seek(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
+
 
     # def play_other(self):
     #     if self.is_playing:
@@ -211,3 +277,5 @@ class Queue():
 
     def get_entry(self, index: int) -> Entry:
         return self.content[index]
+    
+

@@ -12,7 +12,7 @@ def time_format(seconds: int) -> str:
         seconds (int): 
 
     Returns:
-        str: formatted time (hhhh:mm:ss) or (mm:ss)
+        str: formatted time (h:mm:ss) or (m:ss)
     """
 
 
@@ -22,9 +22,9 @@ def time_format(seconds: int) -> str:
     s = seconds % 60
 
     if h > 0:
-        return f"{h}:{m}:{s}"
+        return f"{h}:{m:0>2}:{s:0>2}"
     else:
-        return f"{m}:{s}"
+        return f"{m}:{s:0>2}"
 
 
 def pick_sound_file(folder_name: str) -> tuple[bool, str]:

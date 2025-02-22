@@ -1,9 +1,10 @@
 import os
 import json
 
-CFGFILE = "resources/config.json"
+CFGFILE: str = "resources/config.json"
 
 class Config():
+
     @classmethod
     def readConfig(self):
         if os.path.isfile(CFGFILE):
@@ -13,10 +14,10 @@ class Config():
             f.close()
             
             if 'discord-token' not in self.conf:
-                print("Config: [ERR] No discord token provided. The bot can't work without a discord token")
+                print("[CONFIG.ERROR] No discord token provided. The bot can't work without a discord token")
                 return
 
-            print("Config: Will write and read files at those directories (relative to working dir):")
+            print("[CONFIG.FILES] Will write and read files at those directories (relative to working dir):")
             
             self.downloadDirectory = "resources/downloads/" # default downloads directory
             # if 'download-directory' in self.conf:
@@ -47,16 +48,19 @@ class Config():
                 self.afkLeaveTime = self.conf['minutes-before-disconnecting']
 
             if self.afkLeaveActive:
-                print("Config: Will disconnect when inactive for more than %d minutes" % (self.afkLeaveTime))
+                print("[CONFIG.AFK] Will disconnect when inactive for more than %d minutes" % (self.afkLeaveTime))
             else:
-                print("Config: Will not disconnect when inactive")
+                print("[CONFIG.AFK] Will not disconnect when inactive")
 
             self.spotifyEnabled = False
             if 'spotify-client-id' and 'spotify-client-secret' in self.conf:
                 self.spotifyEnabled = True
-            print("Config: Spotify research is %s" % ("enabled" if self.spotifyEnabled else "disabled"))
+            print("[CONFIG.SPOTIFY] research is %s" % ("enabled" if self.spotifyEnabled else "disabled"))
 
-            
+            self.debug: bool = False
+            if 'debug' in self.conf:
+                self.debug = self.conf['debug']
+                
             
             # self.FoxDotEnabled = False
             # if "FoxDot-port" and "FoxDot-address" in self.conf:
@@ -66,10 +70,13 @@ class Config():
             #     print("Config: FoxDot is disabled")
 
             print('----------------')
-
+            if self.debug is True:
+                print("[CONFIG.DEBUG] Debug flag activated !")
+                print('----------------')
+            
             self.token = self.conf['discord-token']
         else:
-            print(f"Config: [ERR] Config file is missing {CFGFILE}")
+            print(f"[CONFIG.ERROR] Config file is missing {CFGFILE}")
             exit()
 
     @classmethod

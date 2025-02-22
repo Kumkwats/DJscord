@@ -1,7 +1,6 @@
 
 """Entry point of the bot
 """
-
 import os
 import discord
 
@@ -34,7 +33,7 @@ if __name__ == "__main__":
             type=discord.ActivityType.listening,
             name=config.getPrefix()+"help"))
 
-        print(f"Logged in as {bot.user} ({bot.user.id})")
+        print(f"[OK] Logged in as {bot.user} ({bot.user.id})")
         print('----------------')
 
     @bot.event
@@ -64,6 +63,14 @@ if __name__ == "__main__":
     @bot.command(description="Passer musique")
     async def skip(ctx: discord.ApplicationContext):
         await musicCog.skip(ctx)
+    
+    @bot.command(description="Pause musique")
+    async def pause(ctx: discord.ApplicationContext):
+        await musicCog.pause(ctx)
+
+    @bot.command(description="Reprendre musique")
+    async def resume(ctx: discord.ApplicationContext):
+        await musicCog.resume(ctx)
 
     @bot.command(description="STOP")
     async def stop(ctx: discord.ApplicationContext):

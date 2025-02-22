@@ -11,7 +11,7 @@ from discord.ext import tasks, commands
 
 
 
-from DJscordBot.entities import Entry, Playlist, Queue
+from DJscordBot.entities import Entry, Playlist, Queue, NextEntryCondition
 from DJscordBot.utils import time_format, pick_sound_file
 from DJscordBot.config import config
 
@@ -37,23 +37,26 @@ class Music():
     async def play(self, ctx: discord.ApplicationContext, query: str):
         await ctx.defer(ephemeral=True)
 
+        guild = ctx.guild.id
         author_voice = ctx.author.voice
         if author_voice is None: # Not connected
+            print(f"[CONNECT.ERROR] no author_voice, cannot connect (GID:{guild})")
             return await ctx.respond(
                 "Vous n'êtes pas connectés à un salon vocal", 
-                phemeral=True)
+                ephemeral=True)
         
-        guild = ctx.guild.id
+        
         author_text = ctx.channel
 
         #New Guild
         if guild not in Queues: 
-            Queues[guild] = Queue(None, author_text)
+            print(f"[QUEUE] new queue added, trying connection (GID:{guild})")
+            Queues[guild] = Queue(guild, None, author_text)
             Queues[guild].voice_client = await author_voice.channel.connect(
                 timeout=600,
                 reconnect=True)
 
-            print(f"Guild ({guild}): new connection to channel {author_voice.channel.name}")
+            print(f"[CONNECT.SUCCESS] new connection to channel {author_voice.channel.name} (GID:{guild})")
 
             #Only add the startup sound if there is no queue
             check, file = pick_sound_file("startup")
@@ -68,34 +71,33 @@ class Music():
                     entry.thumbnail = "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/3ddaa372-c58c-4587-911e-1d625dff64dc/dapv26n-b138c16c-1cfc-45c3-9989-26fcd75d3060.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvM2RkYWEzNzItYzU4Yy00NTg3LTkxMWUtMWQ2MjVkZmY2NGRjXC9kYXB2MjZuLWIxMzhjMTZjLTFjZmMtNDVjMy05OTg5LTI2ZmNkNzVkMzA2MC5qcGcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.PnU42OFMHcio7nJ4a5Jsp8C-d6exHqd3vInU1682x1E"
                     entry.url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
-                    queue = Queues[guild]
-                    await queue.add_entry(entry)
-                    #print("added to queue")
+                    await Queues[guild].add_entry(entry)
+                    print(f"[QUEUE.STARTUP] Startup file added to queue (GID:{guild})")
                 else:
-                    print("[INFO] Music.play(): Startup: Aucun fichier trouvé")
+                    print(f"[QUEUE.STARTUP] Aucun fichier trouvé (GID:{guild})")
             else:
-                print("[INFO] Music.play(): Startup: Dossier Sounds inexistant")
+                print(f"[QUEUE.STARTUP] Dossier Sounds inexistant (GID:{guild})")
         #Existing queue checks
-        else: 
+        else:
+            print(f"[QUEUE] existing queue, checking voice status (GID:{guild})")
             if not Queues[guild].voice_client.is_connected():
-                print("Voice client is none")
+                print(f"[VOICE.STATUS] voice client not connected, reconnecting (GID:{guild})")
                 await Queues[guild].connect(author_voice.channel)
                 if Queues[guild].voice_client.is_connected():
-                    print("Voice client is reconnected")
+                    print(f"[VOICE.SUCCESS] voice client reconnected (GID:{guild})")
                 else:
-                    print("Voice client was unable to reconnect")
                     Queues.pop(guild)
+                    print(f"[VOICE.ERROR] voice client unable to reconnect, aborting and removing guild (GID:{guild})")
                     return await ctx.respond(
-                        "Je n'ai pas réussi à me reconnecter...",
-                        ephemeral=True)
+                        "Une erreur est survenu, je n'ai pas réussi à me reconnecter... veuillez réessayer ultérieurement")
                     
 
             if author_voice.channel != Queues[guild].voice_client.channel:
                 await Queues[guild].move(author_voice.channel)
-
-                print(f"Guild ({guild}): moved to {author_voice.channel}")
+                print(f"[USER_HAS_MOVED] moved to new channel : {author_voice.channel} (GID:{guild})")
         
         # print("Guild (%d): Connected to %s (number of members: %d)" % (guild, Queues[guild].voice_client.channel.name, len(Queues[guild].voice_client.channel.members)))
+
 
         queue = Queues[guild]
         entry = None
@@ -103,17 +105,21 @@ class Music():
 
 
         # Query processing
-
+        print(f"[QUERY.PROCESS] begin query processing on \"{query}\" (GID:{guild})")
         # Append HTTPS to the link sent
         if query.startswith("www."):
             query = "https://" + query
 
 
         # Spotify Search
-        if query.startswith(("spotify:", "https://open.spotify.com/")): 
+        if query.startswith(("spotify:", "https://open.spotify.com/")):
             if not config.spotifyEnabled:
-                return await ctx.respond('La recherche Spotify n\'a pas été configurée')
+                print(f"[SPOTIFY.DISABLED] Spotify research is disabled (GID:{guild})")
+                return await ctx.respond(
+                    'La recherche Spotify n\'a pas été configurée',
+                    ephemeral = True)
             
+            print(f"[QUERY.PROCESS.SPOTIFY] begin spotify search on {query} (GID:{guild})")
             if query.startswith("https://open.spotify.com/"):
                 query = query[len("https://open.spotify.com/"):].replace('/', ':')
             else:
@@ -129,17 +135,21 @@ class Music():
                 if _type == 'track':
                     track = Spotify.getTrack(_id)
                     query = f"{track['name']} {track['artists'][0]['name']}"
+                    print(f"[SPOTIFY.SUCCESS] track found, passing to youtube search (GID:{guild})")
                 elif _type == 'playlist':
-                    return await ctx.respond('Les playlists Spotify ne sont pas pris en charge', ephemeral=True)
+                    print(f"[SPOTIFY.NOT_IMPLEMENTED] Spotify playlists are not implemented (GID:{guild})")
+                    return await ctx.respond('Les playlists Spotify ne sont melheureusement pas pris en charge', ephemeral=True)
                 else:
-                    raise Exception("Unhandled type")
+                    print(f"[SPOTIFY.UNHANDLED] type \"{_type}\" is not handled (GID:{guild})")
+                    return await ctx.respond('Une erreur est survenue, vérifier bien que le lien spotify dirige vers une musique', ephemeral=True)
             except Exception:
-                print(f"[FAILED SEARCH] Spotify search failed to find music\n\n{traceback.format_exc()}")
+                print(f"[SPOTIFY.ERROR] Spotify search failed to find music\n\n{traceback.format_exc()}")
                 return await ctx.respond('Le lien Spotify est invalide', ephemeral=True)
 
         
         # Other streams
         if (query.startswith("http") or query.startswith("udp://")) and not query.startswith(("https://youtu.be", "https://www.youtube.com", "https://youtube.com")):
+            print(f"[QUERY.PROCESS.OTHER] query \"{query}\" is another type of stream, may not work  (GID:{guild})")
             entry = Entry(query, ctx.author)
             entry.BuildMetaDataOtherStreams(query)
             position = await queue.add_entry(entry)
@@ -151,38 +161,41 @@ class Music():
         # YouTube Search
         else:
             # Search query
+            print(f"[QUERY.PROCESS.YOUTUBE] begin youtube processing on \"{query}\" (GID:{guild})")
             if not query.startswith("https://"):
+                print(f"[YOUTUBE.SEARCH] begin youtube search with \"{query}\" (GID:{guild})")
                 message: discord.WebhookMessage = await ctx.respond(
                     f"Recherche de \"{query}\"...",
                     ephemeral=True)
                 found: bool = False
                 result = None
-                # Méthode youtube-search-python
-                try:
-                    result = await Youtube.searchVideos_YSP(query)
-                    if result is not None:
-                        found = True
-                except Exception:
-                    print("[FAILED SEARCH] ysp.Search failed to find music, falling back to yt-dlp")
-                    # print(f"[FAILED SEARCH] ysp.Search failed to find music\n\n{traceback.format_exc()}")
+                # # Méthode youtube-search-python
+                # try:
+                #     result = await Youtube.searchVideos_YSP(query)
+                #     if result is not None:
+                #         found = True
+                # except Exception:
+                #     print("[YSP.SEARCH.ERROR] ysp.Search failed to find music, falling back to yt-dlp (GID:{guild})")
+                #     # print(f"[FAILED SEARCH] ysp.Search failed to find music\n\n{traceback.format_exc()}")
                 if not found:
                     try:
                         result = await Youtube.searchVideosYT_DLP(query)
                         if result is not None:
                             found = True
                     except Exception:
-                        print(f"[FAILED SEARCH] yt-dlp.Search failed to find music\n\n{traceback.format_exc()}")
+                        print(f"[YT-DLP.SEARCH.ERROR] yt-dlp.Search failed to find music (GID:{guild})\n\n{traceback.format_exc()}")
 
                 if not found:
-                    return await message.edit(content="La recherche à échoué")
-                await message.edit(content=f"Vidéo trouvée : **{(result['title'])}**")
+                    return await message.edit(content="La recherche a échoué")
+                await message.edit(content=f"Vidéo trouvée : **{(result['title'])}** de {(result['channel'])}, téléchargement...")
 
                 # url = result["webpage_url"]
                 # print(url)
             # Youtube Link
             else:
+                print(f"[YOUTUBE.LINK] begin youtube search on link \"{query}\" (GID:{guild})")
                 message: discord.WebhookMessage = await ctx.respond(
-                    f"Investigation sur \"{query[8:]}\"...",
+                    f"Investigation sur le lien \"{(query[len('https://'):])}\"...",
                     ephemeral=True)
                 result = await Youtube.searchVideosYT_DLP(query)
 
@@ -191,14 +204,15 @@ class Music():
             try:
                 # data = await Youtube.fetchData(url, self.bot.loop)
                 data = result
-                print(result['webpage_url'])
+                print(f"[YOUTUBE.SUCCESS] found link \"{(result['webpage_url'])}\" (GID:{guild})")
             except Exception:
-                print(f"[FAILED SEARCH] link check failed\n\n{traceback.format_exc()}")
+                print(f"[YOUTUBE.ERROR] link check failed\n\n{traceback.format_exc()} (GID:{guild})")
                 return await message.edit('Une erreur est survenue lors de la vérification du lien')
 
             applicant = ctx.author
 
             if 'entries' in data:
+                print(f"[YOUTUBE.PLAYLIST] playliste detected, extracting every entries (GID:{guild})")
                 playlist = Playlist()
                 playlist.buildMetadataYoutube(data)
                 queue_start = Queues[guild].size
@@ -216,9 +230,10 @@ class Music():
                                     message,
                                     text,
                                     self.bot.loop),
+                            
                             except Exception:
-                                print(f"[FAILED DOWNLOAD] unable to download {data['entries'][i]['title']}\n\n{traceback.format_exc()}")
-                                await message.edit(content=f"Erreur lors du téléchargement de {data['entries'][i]['title']}")
+                                print(f"[YOUTUBE.DOWNLOAD.ERROR] unable to download {data['entries'][i]['title']} (GID:{guild})\n\n{traceback.format_exc()}")
+                                await message.edit(content=f"({i+1}/{len(data['entries'])}) Erreur lors du téléchargement de {data['entries'][i]['title']}")
                                 continue
 
                             file_size = os.path.getsize(config.downloadDirectory + filename)
@@ -248,7 +263,7 @@ class Music():
                         await Youtube.downloadAudio(data['webpage_url'], message, text, self.bot.loop)
                         file_size = os.path.getsize(config.downloadDirectory + filename)
                     except Exception:
-                        print(f"[FAILED DOWNLOAD] unable to download {data['entries'][i]['title']}\n\n{traceback.format_exc()}")
+                        print(f"[YOUTUBE.DOWNLOAD.ERROR] unable to download {data['entries'][i]['title']} (GID:{guild})\n\n{traceback.format_exc()}")
                         return await message.edit(content=f"Erreur lors du téléchargement de {data['title']}")
                     
 
@@ -259,7 +274,7 @@ class Music():
                     await message.edit(content=f"{position}: {data['title']} a été ajouté à la file d\'attente")
                     await ctx.send(f"{ctx.author.display_name} a ajouté une musique…")
                 else:
-                    print("Trying to add music but voice_client is not connected")
+                    print(f"[CONNECT.ERROR] Trying to add music but voice_client is not connected (GID:{guild})")
 
     async def now_playing(self, ctx: discord.ApplicationContext):
         guild = ctx.guild.id
@@ -283,16 +298,25 @@ class Music():
             return await ctx.respond('L\'index %d n\'existe pas' % (index), ephemeral=True)
         
         entry = Queues[guild].content[index]
+
+
         content = ""
+
+        if hasattr(entry, 'like_count') and hasattr(entry, 'view_count'):
+            content += f"{(entry.view_count)} vues | {entry.like_count} likes\n"
+
         if hasattr(entry, 'channel') and hasattr(entry, 'channel_url'):
-            content += f"Chaîne : [{entry.channel}]({entry.channel_url})\n"
+            content += f"Chaîne : [{entry.channel}]({entry.channel_url})"
+            if hasattr(entry, 'channel_follower_count'):
+                content += f" ({entry.channel_follower_count} abonnés)"
+            content += "\n\n"
 
         if Queues[guild].cursor == index:
             pause: str = "[Paused]" if Queues[guild].voice_client.is_paused() else ""
             current: float = Queues[guild].pausetime - Queues[guild].starttime if Queues[guild].voice_client.is_paused() else time.time() - Queues[guild].starttime
             
             if not hasattr(entry, 'duration'): #Other Stream
-                content += f"Durée d'écoute : {time_format(current)} {pause}\n"
+                content += f"Durée d'écoute : {time_format(current)} {pause}\n\n"
             else: #File
                 content += f"Progression : {time_format(current)}/{time_format(entry.duration)} {pause}\n"
                 
@@ -304,14 +328,16 @@ class Music():
                         content += "●"
                     else:
                         content += "─"
-                content += f"] ({int((current/entry.duration)*100)}%)\n"
+                content += f"] ({int((current/entry.duration)*100)}%)\n\n"
 
         if hasattr(entry, 'album'):
-            content += f"Album : {entry.album}\n"
+            content += f"Album : {entry.album}\n\n"
         if hasattr(entry, 'playlist'):
             if entry.playlist is not None :
-                content += f"Playlist : [{entry.playlist.title}]({entry.playlist.url})\n"
-        content += f"Position : {index}"
+                content += f"Playlist : [{entry.playlist.title}]({entry.playlist.url})\n\n"
+        content += f"Position dans la queue : {index}"
+
+
 
         embed = discord.Embed(
             title = entry.title,
@@ -320,13 +346,26 @@ class Music():
             color = 0x565493
         )
 
+        # embed_dict = {
+        #     "title" : entry.title,
+        #     "url" : entry.url,
+        #     "video" : {"url" : entry.url, "height" : 200, "width" : 200},
+        #     "description" : content,
+        #     "color" : 0x565493
+        # }
+
+        # embed = discord.Embed.from_dict(embed_dict)
+
         if Queues[guild].cursor == index:
-            big_pause = "❚❚" if Queues[guild].voice_client.is_paused() else "▶"
-            name = big_pause + "\t" + (" En pause" if Queues[guild].voice_client.is_paused() else " En cours de lecture")
+            play_status = " ❚❚" if Queues[guild].voice_client.is_paused() else " ▶"
+            name = play_status + "\t" + (" En pause" if Queues[guild].voice_client.is_paused() else " En cours de lecture")
         else:
             name = "Informations piste"
         embed.set_author(name = name, icon_url = self.bot.user.display_avatar.url)
 
+        # if entry.is_youtube:
+        #     if hasattr(entry, 'url'):
+        #         embed.video = 
         if hasattr(entry, 'thumbnail'):
             embed.set_image(url = entry.thumbnail)
         #embed.set_thumbnail(url=self.bot.user.avatar.url)
@@ -504,7 +543,7 @@ class Music():
         try:
             time = list(map(int, timeCode.split(":")))[::-1]
         except:
-            return await ctx.respond("Quelque chose ne va pas dans la syntaxe (doit être hh:mm:ss ou mmmm:ss ou bien ssss)", ephemeral=True)
+            return await ctx.respond("Quelque chose ne va pas dans la syntaxe (doit être hhhh:mm:ss ou mmmm:ss ou bien ssss)", ephemeral=True)
         (secs, mins, hrs) = (0,0,0)
         secs = time[0]
         if len(time) > 1:
@@ -522,10 +561,10 @@ class Music():
         desiredStart = secs + 60*mins + 60*60*hrs
         
         if 0 <= desiredStart < currentEntry.duration -1:
-            Queues[guild].repeat_bypass = True
+            Queues[guild].next_entry_condition = NextEntryCondition.SEEK
             Queues[guild].seek_time = desiredStart
             Queues[guild].voice_client.stop()
-            return await ctx.respond(f"Utilisation de seek !") #TODO better response
+            return await ctx.respond(f"Utilisation de Seek:tm: !", ephemeral=True) #TODO better response
         else:
             return await ctx.respond("La vidéo sera déjà finie à %s..." % (time_format(desiredStart)), ephemeral=True)
 
@@ -534,6 +573,7 @@ class Music():
 
         if guild in Queues:
             if Queues[guild].cursor < Queues[guild].size:
+                Queues[guild].next_entry_condition = NextEntryCondition.SKIP
                 Queues[guild].repeat_bypass = True
                 Queues[guild].cursor = Queues[guild].cursor + 1
                 Queues[guild].voice_client.stop()
@@ -543,33 +583,35 @@ class Music():
         else:
             return await ctx.respond('Aucune lecture en cours', ephemeral=True)
 
-    #TODO
-    async def pause(self, context: commands.Context):
-        guild = context.guild.id
+    async def pause(self, ctx: discord.ApplicationContext):
+        guild = ctx.guild.id
         
         if guild in Queues:
             if Queues[guild].voice_client.is_playing():
                 Queues[guild].voice_client.pause()
                 Queues[guild].pausetime = time.time()
-                return await context.send('Mis en pause')
+                print(f"[MUSIC.PAUSE] paused listening (GID:{guild})")
+                return await ctx.respond("Lecture mise en pause")
             else:
-                return await context.send('Déjà en pause')
+                return await ctx.respond("Lecture déjà en pause !", ephemeral=True)
         else:
-            return await context.send('Aucune lecture en cours sur ce serveur')
+            print(f"[MUSIC.PAUSE.ERROR] pause() called but not in the registered guilds (GID:{guild})")
+            return await ctx.respond("Selon les informations que je possède, il n'y a aucune lecture en cours sur ce serveur", ephemeral=True)
 
-    #TODO
-    async def resume(self, context: commands.Context):
-        guild = context.guild.id
+    async def resume(self, ctx: discord.ApplicationContext):
+        guild = ctx.guild.id
         if guild in Queues:
             if Queues[guild].voice_client.is_paused():
                 Queues[guild].voice_client.resume()
                 Queues[guild].starttime = time.time() - (Queues[guild].pausetime - Queues[guild].starttime) # Setting starttime to the correct time to ensure that the time elapsed on the entry is correct when resuming
                 Queues[guild].pausetime = 0
-                return await context.send('Reprise de la lecture')
+                print(f"[MUSIC.RESUME] resumed listening (GID:{guild})")
+                return await ctx.respond("Reprise de la lecture")
             else:
-                return await context.send('Déjà en lecture')
+                return await ctx.respond("On est déjà en lecture !", ephemeral=True)
         else:
-            return await context.send('Aucune lecture en cours sur ce serveur')
+            print(f"[MUSIC.RESUME.ERROR] resume() called but not in the registered guilds (GID:{guild})")
+            return await ctx.respond("Selon les informations que je possède, il n'y a aucune lecture en cours sur ce serveur", ephemeral=True)
 
     async def stop(self, ctx: discord.ApplicationContext):
         guild = ctx.guild.id
@@ -578,11 +620,14 @@ class Music():
             if Queues[guild].voice_client.is_playing or Queues[guild].voice_client.is_paused:
                 if ctx.author.voice is None or ctx.author.voice.channel != Queues[guild].voice_client.channel:
                     return await ctx.respond("Je suis en train de jouer de la musique là, viens me le dire en face !", ephemeral=True)
+                Queues[guild].next_entry_condition = NextEntryCondition.STOP
                 Queues[guild].repeat_bypass = True
                 Queues[guild].voice_client.stop()
+                print(f"[MUSIC.STOP] stopped listening (GID:{guild})")
                 return await ctx.respond("Ok j'arrête de lire la musique :(")
         else:
-            return await ctx.respond("Je suis pas connecté sur ce serveur en fait !", ephemeral=True)
+            print(f"[MUSIC.STOP.ERROR] stop() called but not in the registered guilds (GID:{guild})")
+            return await ctx.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
 
     async def leave(self, ctx: discord.ApplicationContext):
         guild = ctx.guild.id
@@ -592,24 +637,28 @@ class Music():
                 ctx.voice_client.disconnect()
                 return await ctx.respond('Ok bye!')
             else:
-                return await ctx.respond('Aucune liste d\'attente', ephemeral=True)
+                print(f"[MUSIC.LEAVE.ERROR] leave() called but not in the registered guilds (GID:{guild})")
+                return await ctx.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
 
         if Queues[guild].voice_client is not None:
             if Queues[guild].voice_client.is_playing() and (ctx.author.voice is None or ctx.author.voice.channel != Queues[guild].voice_client.channel):
-                return await ctx.respond("Je suis en train de jouer de la musique là, viens me le dire en face !")
+                return await ctx.respond("Je suis en train de jouer de la musique là, viens me le dire en face !", ephemeral=True)
+            Queues[guild].next_entry_condition = NextEntryCondition.STOP
             Queues[guild].voice_client.stop()
             Queues[guild].voice_client.cleanup()
             await Queues[guild].disconnect()
             for entry in Queues[guild].content:
                 if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
-                        try:
-                            os.remove(config.downloadDirectory + entry.filename) # If running on Windows), the file currently playing will not be erased
-                        except:
-                            print("Leave: error remove")
+                    try:
+                        os.remove(config.downloadDirectory + entry.filename) # If running on Windows), the file currently playing will not be erased
+                    except:
+                        print(f"[MUSIC.LEAVE.ERROR] error while removing file \"{entry.filename}\" (GID:{guild})")
+                        continue
             Queues.pop(guild)
             return await ctx.respond('Ok bye!')
         else:
-            return await ctx.respond('Je suis pas connecté en fait !')
+            print(f"[MUSIC.LEAVE.ERROR] leave() called but voice client is None (GID:{guild})")
+            return await ctx.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
 
     async def repeat(self, ctx: discord.ApplicationContext, mode: str):
         guild = ctx.guild.id
@@ -648,6 +697,9 @@ class Music():
         else:
             return await ctx.respond('L\'index %d n\'existe pas' % index, ephemeral=True)
     
+
+
+
     async def removeGuild(self, id: int):
         if id not in Queues:
             print("RemoveGuild: [NO_ACTION] guild(%d) already removed" % (id))
@@ -680,6 +732,10 @@ class Music():
                     print("RemoveGuild: [EXCEPTION] PermissionError/Not allowed to remove file (%s)" % (config.downloadDirectory + entry.filename))
         print("RemoveGuild: [REMOVED] guild(%d)" % (id))
         Queues.pop(id)
+
+
+
+
 
     #afk loop
     @tasks.loop(seconds=VOICE_ACTIVITY_CHECK_DELTA)
