@@ -3,14 +3,14 @@ import asyncio
 import time
 import random
 import traceback
-
-
+import requests
+from requests import Response
 
 import discord
 from discord.ext import tasks, commands
 
 
-
+from DJscordBot.discordUtils import DiscordWebhookMsgWraper
 from DJscordBot.entities import Entry, Playlist, Queue, NextEntryCondition
 from DJscordBot.utils import time_format, pick_sound_file
 from DJscordBot.config import config
@@ -102,6 +102,8 @@ class Music():
         queue = Queues[guild]
         entry = None
 
+        discordUserResponse: DiscordWebhookMsgWraper = DiscordWebhookMsgWraper(ctx)
+
 
 
         # Query processing
@@ -133,9 +135,25 @@ class Music():
                     [_misc, _type, _id] = splitedQuery
 
                 if _type == 'track':
+                    print(f"[QUERY.PROCESS.SPOTIFY.SUCCESS] track found, converting to youtube url... (GID:{guild})")
+                    foundURL = False
                     track = Spotify.getTrack(_id)
-                    query = f"{track['name']} {track['artists'][0]['name']}"
-                    print(f"[SPOTIFY.SUCCESS] track found, passing to youtube search (GID:{guild})")
+
+                    try:
+                        print(f"[SPOTIFY.PROCESS] attempting song.link conversion (GID:{guild})")
+                        songLinkResp: Response = requests.get(f"https://api.song.link/v1-alpha.1/links?url=spotify%3Atrack%3A{_id}")
+                        songLinkData = songLinkResp.json()
+                        query = songLinkData['linksByPlatform']['youtube']['url']
+                        if not query.startswith("https://"):
+                            query = "https//" + query
+                        # query = f"https://{(songLinkData['linksByPlatform']['youtube']['url'])}"
+                        foundURL = True
+                        print(f"[SPOTIFY.PROCESS] song.link conversion succesful (GID:{guild})")
+                    except Exception:
+                        print(f"[SPOTIFY.ERROR] unable to convert with song.link falling back to lazy youtube search (GID:{guild})")
+                        pass
+                    if not foundURL:
+                        query = f"{track['name']} {track['artists'][0]['name']}"
                 elif _type == 'playlist':
                     print(f"[SPOTIFY.NOT_IMPLEMENTED] Spotify playlists are not implemented (GID:{guild})")
                     return await ctx.respond('Les playlists Spotify ne sont melheureusement pas pris en charge', ephemeral=True)
@@ -164,9 +182,10 @@ class Music():
             print(f"[QUERY.PROCESS.YOUTUBE] begin youtube processing on \"{query}\" (GID:{guild})")
             if not query.startswith("https://"):
                 print(f"[YOUTUBE.SEARCH] begin youtube search with \"{query}\" (GID:{guild})")
-                message: discord.WebhookMessage = await ctx.respond(
-                    f"Recherche de \"{query}\"...",
-                    ephemeral=True)
+                # message: discord.WebhookMessage = await ctx.respond(
+                #     f"Recherche de \"{query}\"...",
+                #     ephemeral=True)
+                await discordUserResponse.WriteUserResponse(f"Recherche de \"{query}\"...")
                 found: bool = False
                 result = None
                 # # Méthode youtube-search-python
@@ -186,17 +205,20 @@ class Music():
                         print(f"[YT-DLP.SEARCH.ERROR] yt-dlp.Search failed to find music (GID:{guild})\n\n{traceback.format_exc()}")
 
                 if not found:
-                    return await message.edit(content="La recherche a échoué")
-                await message.edit(content=f"Vidéo trouvée : **{(result['title'])}** de {(result['channel'])}, téléchargement...")
+                    return await discordUserResponse.WriteUserResponse("La recherche a échoué")
+                    # return await message.edit(content="La recherche a échoué")
+                await discordUserResponse.WriteUserResponse(f"Vidéo trouvée : **{(result['title'])}** de {(result['channel'])}, téléchargement...")
+                # await message.edit(content=f"Vidéo trouvée : **{(result['title'])}** de {(result['channel'])}, téléchargement...")
 
                 # url = result["webpage_url"]
                 # print(url)
             # Youtube Link
             else:
                 print(f"[YOUTUBE.LINK] begin youtube search on link \"{query}\" (GID:{guild})")
-                message: discord.WebhookMessage = await ctx.respond(
-                    f"Investigation sur le lien \"{(query[len('https://'):])}\"...",
-                    ephemeral=True)
+                await discordUserResponse.WriteUserResponse(f"Investigation sur le lien \"{(query[len('https://'):])}\"...")
+                # message: discord.WebhookMessage = await ctx.respond(
+                #     f"Investigation sur le lien \"{(query[len('https://'):])}\"...",
+                #     ephemeral=True)
                 result = await Youtube.searchVideosYT_DLP(query)
 
 
@@ -207,12 +229,13 @@ class Music():
                 print(f"[YOUTUBE.SUCCESS] found link \"{(result['webpage_url'])}\" (GID:{guild})")
             except Exception:
                 print(f"[YOUTUBE.ERROR] link check failed\n\n{traceback.format_exc()} (GID:{guild})")
-                return await message.edit('Une erreur est survenue lors de la vérification du lien')
+                return await discordUserResponse.WriteUserResponse('Une erreur est survenue lors de la vérification du lien')
+                # return await message.edit('Une erreur est survenue lors de la vérification du lien')
 
             applicant = ctx.author
 
             if 'entries' in data:
-                print(f"[YOUTUBE.PLAYLIST] playliste detected, extracting every entries (GID:{guild})")
+                print(f"[YOUTUBE.PLAYLIST] playlist detected, extracting every entries (GID:{guild})")
                 playlist = Playlist()
                 playlist.buildMetadataYoutube(data)
                 queue_start = Queues[guild].size
@@ -227,13 +250,14 @@ class Music():
                                 text = f"({i+1}/{len(data['entries'])}) Téléchargement de {data['entries'][i]['title']}..."
                                 await Youtube.downloadAudio(
                                     data['entries'][i]['webpage_url'],
-                                    message,
+                                    discordUserResponse.message,
                                     text,
                                     self.bot.loop),
                             
                             except Exception:
                                 print(f"[YOUTUBE.DOWNLOAD.ERROR] unable to download {data['entries'][i]['title']} (GID:{guild})\n\n{traceback.format_exc()}")
-                                await message.edit(content=f"({i+1}/{len(data['entries'])}) Erreur lors du téléchargement de {data['entries'][i]['title']}")
+                                await discordUserResponse.WriteUserResponse(f"({i+1}/{len(data['entries'])}) Erreur lors du téléchargement de {data['entries'][i]['title']}")
+                                # await message.edit(content=f"({i+1}/{len(data['entries'])}) Erreur lors du téléchargement de {data['entries'][i]['title']}")
                                 continue
 
                             file_size = os.path.getsize(config.downloadDirectory + filename)
@@ -245,11 +269,14 @@ class Music():
                             position = await queue.add_entry(entry, queue_start + i)
                             #TODO bug when stopping the bot while a playlist is currently added in the queue, the bot will resume by itself by adding the next track to the queue
                             if i == len(data['entries']) - 1:
-                                await message.edit(content=f"{data['title']} a été ajouté à la file d\'attente")
+                                await discordUserResponse.WriteUserResponse(f"{data['title']} a été ajouté à la file d\'attente")
+                                # await message.edit(content=f"{data['title']} a été ajouté à la file d\'attente")
                             else:
-                                await message.edit(content=f"({i+1}/{len(data['entries'])}) {position}: {data['entries'][i]['title']} a été ajouté à la file d\'attente")
+                                await discordUserResponse.WriteUserResponse(f"({i+1}/{len(data['entries'])}) {position}: {data['entries'][i]['title']} a été ajouté à la file d\'attente")
+                                # await message.edit(content=f"({i+1}/{len(data['entries'])}) {position}: {data['entries'][i]['title']} a été ajouté à la file d\'attente")
                         else:
-                            await message.edit(content="Téléchargement annulé")
+                            await discordUserResponse.WriteUserResponse("Téléchargement annulé")
+                            # await message.edit(content="Téléchargement annulé")
                             break
             else:
                 if data['is_live'] is True:
@@ -257,21 +284,28 @@ class Music():
                     file_size = 0
                 else:
                     try:
-                        await message.edit(content=f"Vidéo trouvée : **{(result['title'])}**")
+                        await discordUserResponse.WriteUserResponse(f"Vidéo trouvée : **{(result['title'])}**")
+                        # await message.edit(content=f"Vidéo trouvée : **{(result['title'])}**")
                         filename = Youtube.getFilename(data)
                         text = f"Téléchargement de {data['title']}..."
-                        await Youtube.downloadAudio(data['webpage_url'], message, text, self.bot.loop)
+                        await Youtube.downloadAudio(
+                            data['webpage_url'],
+                            discordUserResponse.message,
+                            text,
+                            self.bot.loop)
                         file_size = os.path.getsize(config.downloadDirectory + filename)
                     except Exception:
-                        print(f"[YOUTUBE.DOWNLOAD.ERROR] unable to download {data['entries'][i]['title']} (GID:{guild})\n\n{traceback.format_exc()}")
-                        return await message.edit(content=f"Erreur lors du téléchargement de {data['title']}")
+                        print(f"[YOUTUBE.DOWNLOAD.ERROR] unable to download {data['title']} (GID:{guild})\n\n{traceback.format_exc()}")
+                        return await discordUserResponse.WriteUserResponse(f"Erreur lors du téléchargement de {data['title']}")
+                        #return await message.edit(content=f"Erreur lors du téléchargement de {data['title']}")
                     
 
                 if Queues[guild].voice_client.is_connected():
                     entry = Entry(filename, applicant, file_size)
                     entry.buildMetadataYoutube(data)
                     position = await queue.add_entry(entry)
-                    await message.edit(content=f"{position}: {data['title']} a été ajouté à la file d\'attente")
+                    await discordUserResponse.WriteUserResponse(f"{position}: {data['title']} a été ajouté à la file d\'attente")
+                    # await message.edit(content=f"{position}: {data['title']} a été ajouté à la file d\'attente")
                     await ctx.send(f"{ctx.author.display_name} a ajouté une musique…")
                 else:
                     print(f"[CONNECT.ERROR] Trying to add music but voice_client is not connected (GID:{guild})")

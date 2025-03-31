@@ -11,6 +11,8 @@ from DJscordBot.Commands.manage import Manage
 from DJscordBot.Commands.fun import Fun, chocolatine
 
 if __name__ == "__main__":
+    
+    print("[BOT] Setting up download folder...")
     if os.path.isdir(config.downloadDirectory): # Preparing download folder
         for f in os.listdir(config.downloadDirectory):
             os.remove(config.downloadDirectory + f)
@@ -21,7 +23,8 @@ if __name__ == "__main__":
     intents.messages = True
     intents.message_content = True
 
-    bot = discord.Bot(description="hello", intents=intents)
+    bot = discord.Bot(description="djscord !", intents=intents)
+    print("[BOT] Starting up...")
 
     #TODO make error send a message to the author ??
     @bot.event
@@ -31,9 +34,9 @@ if __name__ == "__main__":
         await bot.change_presence(
             activity=discord.Activity(
             type=discord.ActivityType.listening,
-            name=config.getPrefix()+"help"))
+            name=config.GetPrefix()+"help"))
 
-        print(f"[OK] Logged in as {bot.user} ({bot.user.id})")
+        print(f"[BOT.READY] Logged in as {bot.user} ({bot.user.id})")
         print('----------------')
 
     @bot.event
@@ -149,5 +152,6 @@ if __name__ == "__main__":
     @bot.command(description="Est-ce que c'est pété ?")
     async def cpt(ctx: discord.ApplicationContext):
         await manageCog.cpt(ctx)
+
 
     bot.run(config.token)

@@ -68,7 +68,7 @@ class Help(commands.Cog):
         self.bot = bot
 
     def get(self, context, category, command):
-        PREFIX = config.getPrefix()
+        PREFIX = config.GetPrefix()
         title = "Commande %s%s" % (PREFIX, command)
 
         embed = discord.Embed(
@@ -95,7 +95,7 @@ class Help(commands.Cog):
 
     @commands.command(aliases = ['aide', 'h', 'oskour', 'aled'])
     async def help(self, context, query: str = None):
-        PREFIX = config.getPrefix()
+        PREFIX = config.GetPrefix()
         embed = discord.Embed(
             color = 0x565493
         )

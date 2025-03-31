@@ -5,19 +5,26 @@ CFGFILE: str = "resources/config.json"
 
 class Config():
 
-    @classmethod
-    def readConfig(self):
+    _defaults = {
+        'discord-token' : "<your discord token here>",
+        'minutes-before-disconnecting' : 15
+    }
+
+    def ReadConfig(self):
         if os.path.isfile(CFGFILE):
-            print("Reading Config...")
+            #print("Reading Config...")
             f = open(CFGFILE, 'r')
             self.conf = json.load(f)
             f.close()
             
             if 'discord-token' not in self.conf:
-                print("[CONFIG.ERROR] No discord token provided. The bot can't work without a discord token")
-                return
+                print("[CONFIG.ERROR] No discord token provided in config file. The bot can't work without a discord token")
+                exit()
+            elif self.conf["discord-token"].startswith('<') or self.conf["discord-token"].endswith('>'):
+                print("[CONFIG.ERROR] Please provide a valid token. The bot can't work without a valid token")
+                exit()
 
-            print("[CONFIG.FILES] Will write and read files at those directories (relative to working dir):")
+            print("[FILE_DIRECTORIES] Will write and read files at those directories (relative to working dir):")
             
             self.downloadDirectory = "resources/downloads/" # default downloads directory
             # if 'download-directory' in self.conf:
@@ -60,14 +67,6 @@ class Config():
             self.debug: bool = False
             if 'debug' in self.conf:
                 self.debug = self.conf['debug']
-                
-            
-            # self.FoxDotEnabled = False
-            # if "FoxDot-port" and "FoxDot-address" in self.conf:
-            #     self.FoxDotEnabled = True
-            #     print("Config: FoxDot is enabled")
-            # else:
-            #     print("Config: FoxDot is disabled")
 
             print('----------------')
             if self.debug is True:
@@ -76,19 +75,27 @@ class Config():
             
             self.token = self.conf['discord-token']
         else:
-            print(f"[CONFIG.ERROR] Config file is missing {CFGFILE}")
+            print(f"[CONFIG.NO_FILE] No config file found")
+            self.conf = {
+                "discord-token" : self._defaults["discord-token"]
+            }
+            f = open(CFGFILE, 'w')
+            json.dump(self.conf, f)
+            f.close()
+            print(f"[CONFIG.NO_FILE] Created template at {CFGFILE}")
             exit()
 
     @classmethod
-    def getPrefix(self):
-        return self.conf['prefix']
+    def GetPrefix(self):
+        return "\u00b5"
+        # return self.conf['prefix']
 
     @classmethod
-    def setPrefix(self, prefix):
+    def SetPrefix(self, prefix):
         self.conf['prefix'] = prefix
         f = open(CFGFILE, 'w')
         json.dump(self.conf, f)
         f.close()
 
 config = Config()
-config.readConfig()
+config.ReadConfig()

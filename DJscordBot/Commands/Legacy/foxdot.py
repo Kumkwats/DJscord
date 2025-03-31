@@ -43,6 +43,6 @@ class Foxdot(commands.Cog):
     async def send_command(message):
         global instance
         self = instance
-        if self.foxdot_started is True and not message.content.startswith(config.getPrefix() + "foxdot"):
+        if self.foxdot_started is True and not message.content.startswith(config.GetPrefix() + "foxdot"):
             lenght = len(message.content)
             self.clientsocket.send(b'\x03' + lenght.to_bytes(2, 'big') + message.content.encode())
