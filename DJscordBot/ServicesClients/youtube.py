@@ -11,7 +11,7 @@ from DJscordBot.config import config
 yt_dlp.utils.bug_reports_message = lambda: ''
 
 ydl_opts = {
-    'format': 'bestaudio/best',
+    'format': 'bestaudio[format_note*=original]/bestaudio',
     'outtmpl': config.downloadDirectory + '%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
     'noplaylist': True,
