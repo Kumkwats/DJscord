@@ -4,13 +4,19 @@
 import os
 import traceback
 
+
 import discord
+from discord import app_commands, Intents, Interaction
+from DJscordBot.djscordBot import DJscordBot
+
 from DJscordBot.config import config
 
-from DJscordBot.Commands.music import Music
-from DJscordBot.Commands.manage import Manage
-from DJscordBot.Commands.fun import Fun, chocolatine
-from DJscordBot.Commands.debug import Debug
+from DJscordBot.discord.utils import InteractionWrapper
+
+from DJscordBot.commands.music import Music
+from DJscordBot.commands.manage import Manage
+from DJscordBot.commands.fun import Fun, chocolatine
+# from DJscordBot.commands.debug import Debug
 
 
 
@@ -25,12 +31,12 @@ if __name__ == "__main__":
         print(f"[BOT] Created download folder in : {config.downloadDirectory}")
 
 
-    intents = discord.Intents.default()
+    intents = Intents.default()
     intents.messages = True
     intents.message_content = True
 
 
-    bot = discord.Bot(description="djscord !", intents=intents)
+    bot: DJscordBot = DJscordBot(description="djscord !", intents=intents)
     
     print("[BOT] Starting up...")
 
@@ -78,119 +84,170 @@ if __name__ == "__main__":
             message (discord.Message): the Discord message sent
         """
 
-        if message.author.bot:
-            return
+        if not message.author.bot:
+            await chocolatine(message)
         
-        await chocolatine(message)
+        
 
     
     #region commands
     musicCog = Music(bot)
-    @bot.command(description="Jouer musique")
-    @commands.guild_only()
-    # @commandChecks.is_connected_to_vc
-    async def play(ctx: discord.ApplicationContext, recherche: str):
-        await musicCog.cmd_play(ctx, recherche)
+
+    play_description = "Recherche YT ou bien un lien vers une vidéo ou une playlist"
+    if config.spotifyEnabled:
+        play_description += " (prends aussi en charge les titres, album et playlist Spotify)"
+
+    @bot.tree.command(description="Jouer musique")
+    @app_commands.guild_only()
+    @app_commands.describe(recherche=play_description)
+    async def play(ctx: Interaction,
+                   recherche: app_commands.Parameter(
+                       display_name="Recherche ou lien",
+                       description=play_description,
+                       type=discord.AppCommandOptionType.integer,
+                       required=True,
+                       )):
+        await musicCog.cmd_play(InteractionWrapper(ctx), recherche)
 
     @play.error
-    async def play_error(ctx: discord.ApplicationContext, error: discord.ApplicationCommandInvokeError):
-        print(traceback.print_exception(error.original))
-        return await ctx.respond(":warning: Une erreur est survenue pendant le traitement de la requète", ephemeral=True)
+    async def play_error(ctx: Interaction, error: app_commands.AppCommandError):
+        print(traceback.print_exception(error))
+        return await ctx.response.send_message(":warning: Une erreur est survenue pendant le traitement de la requète", ephemeral=True)
 
-    @bot.command(description="Selection musique")
-    async def goto(ctx: discord.ApplicationContext,
-                   index: discord.Option(int, min_value=0)):
-        await musicCog.goto(ctx, index)
 
-    @bot.command(description="Passer musique")
-    async def skip(ctx: discord.ApplicationContext):
-        await musicCog.skip(ctx)
+
+    @bot.tree.command(description="Selection musique")
+    @app_commands.guild_only()
+    async def goto(ctx: Interaction,
+                   index: app_commands.Parameter(
+                       description="Position dans la liste à atteindre",
+                       type=discord.AppCommandOptionType.integer,
+                       min_value=0,
+                       required=True,
+                       )):
+        await musicCog.goto(InteractionWrapper(ctx), index)
+
+    @bot.tree.command(description="Passer musique")
+    @app_commands.guild_only()
+    async def skip(ctx: Interaction):
+        await musicCog.skip(InteractionWrapper(ctx))
     
-    @bot.command(description="Pause musique")
-    async def pause(ctx: discord.ApplicationContext):
-        await musicCog.pause(ctx)
+    @bot.tree.command(description="Pause musique")
+    @app_commands.guild_only()
+    async def pause(ctx: Interaction):
+        await musicCog.pause(InteractionWrapper(ctx))
 
-    @bot.command(description="Reprendre musique")
-    async def resume(ctx: discord.ApplicationContext):
-        await musicCog.resume(ctx)
+    @bot.tree.command(description="Reprendre musique")
+    @app_commands.guild_only()
+    async def resume(ctx: Interaction):
+        await musicCog.resume(InteractionWrapper(ctx))
 
-    @bot.command(description="STOP")
-    async def stop(ctx: discord.ApplicationContext):
-        await musicCog.stop(ctx)
+    @bot.tree.command(description="STOP")
+    @app_commands.guild_only()
+    async def stop(ctx: Interaction):
+        await musicCog.stop(InteractionWrapper(ctx))
 
-    queue: discord.SlashCommandGroup = bot.create_group("queue", "OwO la queue")
+
+    #region Queue
+    queue: app_commands.Group = app_commands.Group(name="queue", description="OwO la queue")
+
+
 
     @queue.command(name="page", description="Affiche une page de la *queue*")
-    async def queue_page(ctx: discord.ApplicationContext,
-                        page: discord.Option(int,
-                                             description="id de la page",
-                                             min_value=1)):
-        await musicCog.print_queue(ctx, page)
+    async def queue_page(ctx: app_commands.AppCommandContext,
+                        page: app_commands.Parameter(
+                            description="Numéro de la page",
+                            type=discord.AppCommandOptionType.integer,
+                            min_value=1,
+                            required=True,
+                            )):
+        await musicCog.print_queue(InteractionWrapper(ctx), page)
+
+
 
     @queue.command(name="current", description="Affiche la *queue* autour de la lecture en cours")
-    async def queue_current(ctx: discord.ApplicationContext):
-        await musicCog.print_queue(ctx)
+    async def queue_current(ctx: app_commands.AppCommandContext):
+        await musicCog.print_queue(InteractionWrapper(ctx))
+
+
 
     @queue.command(name="move", description="Déplace une musique")
-    async def queue_move(ctx: discord.ApplicationContext,
-                   frm: discord.Option(int,
-                                       name="from",
-                                       min_value=0),
-                   to: discord.Option(int, min_value=0)):
-        await musicCog.move(ctx, frm, to)
+    async def queue_move(ctx: app_commands.AppCommandContext,
+                   frm: app_commands.Parameter(type=discord.AppCommandOptionType.integer,
+                                               name="from",
+                                               min_value=0),
+                   to: app_commands.Parameter(type=discord.AppCommandOptionType.integer,
+                                              min_value=0)):
+        await musicCog.move(InteractionWrapper(ctx), frm, to)
+
+
 
     @queue.command(name="remove", description="Enlève une musique")
-    async def queue_remove(ctx: discord.ApplicationContext,
-                     index: discord.Option(int,
-                                           min_value=0)):
-        await musicCog.remove(ctx, index)
+    async def queue_remove(ctx: app_commands.AppCommandContext,
+                     index: app_commands.Parameter(type=discord.AppCommandOptionType.integer,
+                                                   min_value=0)):
+        await musicCog.remove(InteractionWrapper(ctx), index)
 
-    #TODO: range - last
+
+
     @queue.command(name="remove_range",description="Enlève **des** musiques")
-    async def queue_remove_range(ctx: discord.ApplicationContext,
-                           start: discord.Option(int, min_value=0),
-                           end: discord.Option(int, min_value=0)):
-        await musicCog.remove(ctx, start, end)
+    async def queue_remove_range(ctx: app_commands.AppCommandContext,
+                                 start: app_commands.Parameter(type=discord.AppCommandOptionType.integer,
+                                                               min_value=0),
+                                 end: app_commands.Parameter(type=discord.AppCommandOptionType.integer,
+                                                             min_value=0)):
+        await musicCog.remove(InteractionWrapper(ctx), start, end)
+
+
 
     @queue.command(name="info", description="Affiche les infos pour une musique de la *queue*")
-    async def queue_info(ctx: discord.ApplicationContext,
-                   index: discord.Option(int,
-                                         description="numéro de la chanson dans la *queue*",
-                                         min_value=0)):
-        await musicCog.info(ctx, index)
+    async def queue_info(ctx: app_commands.AppCommandContext,
+                   index: app_commands.Parameter(type=discord.AppCommandOptionType.integer,
+                                                 description="numéro de la chanson dans la *queue*",
+                                                 min_value=0)):
+        await musicCog.info(InteractionWrapper(ctx), index)
+
+
+    bot.tree.add_command(queue)
+
+    #endregion
+
+
+
 
 
     @bot.command(description="Affiche les infos pour la lecture en cours")
-    async def nowplaying(ctx: discord.ApplicationContext):
-        await musicCog.now_playing(ctx)
+    async def nowplaying(ctx: app_commands.AppCommandContext):
+        await musicCog.now_playing(InteractionWrapper(ctx))
 
 
     #TODO description of timeCode
     @bot.command(description="Va a une partie spécifique de la musique")
-    async def seek(ctx: discord.ApplicationContext, time_code: str):
-        await musicCog.seek(ctx, time_code)
+    async def seek(ctx: app_commands.AppCommandContext, time_code: str):
+        await musicCog.seek(InteractionWrapper(ctx), time_code)
 
     @bot.command(description="oust")
-    async def leave(ctx: discord.ApplicationContext):
-        await musicCog.leave(ctx)
+    async def leave(ctx: app_commands.AppCommandContext):
+        await musicCog.leave(InteractionWrapper(ctx))
 
 
     @bot.command(description="Choisir le mode de répétition")
-    async def repeat(ctx: discord.ApplicationContext,
-                    mode: discord.Option(str, choices=["none", "entry", "playlist", "all"])):
-        await musicCog.repeat(ctx, mode)
+    async def repeat(ctx: app_commands.AppCommandContext,
+                     mode: app_commands.Parameter(type=discord.AppCommandOptionType.string,
+                                                 choices=["none", "entry", "playlist", "all"])):
+        await musicCog.repeat(InteractionWrapper(ctx), mode)
 
 
     funCog = Fun(bot)
 
     manageCog = Manage(bot)
     @bot.command(description="pong ?")
-    async def ping(ctx: discord.ApplicationContext):
-        await manageCog.ping(ctx)
+    async def ping(ctx: app_commands.AppCommandContext):
+        await manageCog.ping(InteractionWrapper(ctx))
 
     @bot.command(description="Est-ce que c'est pété ?")
-    async def cpt(ctx: discord.ApplicationContext):
-        await manageCog.cpt(ctx)
+    async def cpt(ctx: app_commands.AppCommandContext):
+        await manageCog.cpt(InteractionWrapper(ctx))
     #endregion
 
     # print("[BOT.COG] Added Debug Cog")

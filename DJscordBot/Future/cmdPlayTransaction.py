@@ -17,7 +17,7 @@ from DJscordBot.Types.queue import Queue
 from DJscordBot.config import config
 from DJscordBot.Types.enums import PlayQueryType
 from DJscordBot.Types.entry import Entry, EntryPlaylist
-from DJscordBot.discordUtils import DiscordInteractionWrapper
+from DJscordBot.discord.utils import InteractionWrapper
 
 
 
@@ -36,7 +36,7 @@ class MusicPlayCommandTransaction():
 
     def __init__(self, ctx: discord.ApplicationContext, bot: discord.Bot):
         self.ctx: discord.ApplicationContext = ctx
-        self.response_wrapper: DiscordInteractionWrapper = DiscordInteractionWrapper(ctx)
+        self.response_wrapper: InteractionWrapper = InteractionWrapper(ctx)
         self.bot: discord.Bot = bot
         self.new_entries: list[Entry] = []
         self.start_transaction_time: float = time.time()
@@ -122,7 +122,7 @@ class MusicPlayCommandTransaction():
 
 
             case PlayQueryType.LINK_YOUTUBE:
-                print(f"[QUERY.PROCESS.YOUTUBE.LINK] begin process of youtube link \"{query}\" (GID:{self.response_wrapper.guild_ID})")
+                print(f"[QUERY.PROCESS.YOUTUBE.LINK] begin process of youtube link \"{query}\" (GID:{self.response_wrapper.guild_id})")
 
                 link_type: str = youtube.YoutubeAPI.infer_type_from_request_url(query)
                 # Personalize message
@@ -141,16 +141,16 @@ class MusicPlayCommandTransaction():
                 result: youtube.CommonResponseData = await youtube.YoutubeAPI.get_data_async(query, self.__retrieve_data_feedback)
 
                 if result is None:
-                    print(f"[YOUTUBE.ERROR] link check failed\n\n{traceback.format_exc()} | (GID:{self.response_wrapper.guild_ID})")
+                    print(f"[YOUTUBE.ERROR] link check failed\n\n{traceback.format_exc()} | (GID:{self.response_wrapper.guild_id})")
                     return await self.response_wrapper.whisper_to_author(":warning: Une erreur est survenue lors de la vérification du lien")
                 
-                print(f"[YOUTUBE.SUCCESS] found link \"{(result.data['webpage_url'])}\" | (GID:{self.response_wrapper.guild_ID})")
+                print(f"[YOUTUBE.SUCCESS] found link \"{(result.data['webpage_url'])}\" | (GID:{self.response_wrapper.guild_id})")
                 return await self.__yt_process_response_data(result)
 
 
 
             case PlayQueryType.SEARCH_QUERY:
-                print(f"[QUERY.PROCESS.SEARCH] begin youtube search with query: \"{query}\" (GID:{self.response_wrapper.guild_ID})")
+                print(f"[QUERY.PROCESS.SEARCH] begin youtube search with query: \"{query}\" (GID:{self.response_wrapper.guild_id})")
         
                 await self.response_wrapper.append_to_last_whisper(f"- Recherche de `{query}`", True)
                 
@@ -392,7 +392,7 @@ class MusicPlayCommandTransaction():
                 success += 1
                 continue
             else:
-                print(f"[YOUTUBE.PLAYLIST.VIDEO.DOWNLOAD.ERROR] unable to download {pl_yt_video.name} (GID:{self.response_wrapper.guild_ID})")
+                print(f"[YOUTUBE.PLAYLIST.VIDEO.DOWNLOAD.ERROR] unable to download {pl_yt_video.name} (GID:{self.response_wrapper.guild_id})")
                 failed += 1
                 continue
         
@@ -426,7 +426,7 @@ class MusicPlayCommandTransaction():
             print(f"[YOUTUBE.VIDEO.DOWNLOAD] Download success")
             return True
         except Exception as ex:
-            print(f"[YOUTUBE.VIDEO.DOWNLOAD.ERROR] unable to download {yt_video.name} | (GID:{self.response_wrapper.guild_ID})\n\n{ex}")
+            print(f"[YOUTUBE.VIDEO.DOWNLOAD.ERROR] unable to download {yt_video.name} | (GID:{self.response_wrapper.guild_id})\n\n{ex}")
             return False
     
 
@@ -766,7 +766,7 @@ class MusicPlayCommandTransaction():
             print(f"[PLAY.TRANSACTION.SUCCESS] '{spt_pl_yt_video.id}' has been added to queue")
             return True
         else:
-            print(f"[YOUTUBE.PLAYLIST.VIDEO.DOWNLOAD.ERROR] unable to download {spt_pl_yt_video.name} (GID:{self.response_wrapper.guild_ID})")
+            print(f"[YOUTUBE.PLAYLIST.VIDEO.DOWNLOAD.ERROR] unable to download {spt_pl_yt_video.name} (GID:{self.response_wrapper.guild_id})")
             return False
 
 

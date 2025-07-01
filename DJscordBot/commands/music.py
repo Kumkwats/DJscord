@@ -5,9 +5,9 @@ import time
 import discord
 from discord.ext import tasks, commands
 
-
+from DJscordBot.djscordBot import DJscordBot
 from DJscordBot.Managers.queueManager import QueueManager
-from DJscordBot.discordUtils import DiscordInteractionWrapper, EmbedBuilder
+from DJscordBot.discord.utils import InteractionWrapper, EmbedBuilder
 from DJscordBot.Types.queue import Queue, NextEntryCondition, RepeatMode
 from DJscordBot.Types.entry import Entry
 from DJscordBot.utils import time_format, pick_sound_file
@@ -24,7 +24,7 @@ VOICE_ACTIVITY_CHECK_DELTA = 10 #number of seconds between every AFK check
 
 
 class Music():
-    def __init__(self, bot: discord.Bot):
+    def __init__(self, bot: DJscordBot):
         self.bot = bot
         if config.afkLeaveActive:
             #self.music_timeout.start()
@@ -33,13 +33,13 @@ class Music():
     
 #region To sort
     @staticmethod
-    def author_voice_is_connected(ctx: discord.ApplicationContext) -> bool:
+    def author_voice_is_connected(ctx: InteractionWrapper) -> bool:
         if ctx.author.voice is None: # Not connected
-            print(f"[CONNECT.ERROR] no author_voice, cannot connect (GID:{ctx.guild.id})")
+            print(f"[CONNECT.ERROR] no author_voice, cannot connect (GID:{ctx.guild_id})")
             return False
         return True
 
-    # async def searchAndPlay(self, ctx: discord.ApplicationContext, search_query: str):
+    # async def searchAndPlay(self, ctx: discord.Interaction, search_query: str):
     #     print(f"[QUERY.PROCESS.SEARCH] begin youtube search with query: \"{search_query}\" (GID:{discordUserResponse.guildID})")
     #     result = await self.youtube_process_search(cmd_query, discordUserResponse)
     #     try:
@@ -59,19 +59,19 @@ class Music():
 
 
 #region CMD
-    async def cmd_play(self, ctx: discord.ApplicationContext, cmd_query: str):
+    async def cmd_play(self, ctx: InteractionWrapper, cmd_query: str):
         await ctx.defer(ephemeral=True)
         
         guild_id = ctx.guild.id
 
         if not self.author_voice_is_connected(ctx): # Not connected
             print(f"[CONNECT.ERROR] no author_voice, cannot connect (GID:{guild_id})")
-            return await ctx.respond(
+            return await ctx.respond_once_only(
                 "Vous devez être connecté à un salon vocal pour pouvoir ajouter de la musique",
                 ephemeral=True)
 
         
-        discordUserResponse: DiscordInteractionWrapper = DiscordInteractionWrapper(ctx)
+        discordUserResponse: InteractionWrapper = InteractionWrapper(ctx)
 
         
         #New Guild
@@ -88,7 +88,7 @@ class Music():
             if new_voice_client is None:
                 print(f"[CONNECT.VC.EXCEPTION] VC is None")
 
-            queue = QueueManager.create_queue(guild_id, new_voice_client, ctx.channel)
+            queue = QueueManager.create_queue(guild_id, new_voice_client, ctx.context.channel)
             boot_entry = self.__create_boot_entry()
             if boot_entry is not None:
                 queue.add_entry(boot_entry)
@@ -379,7 +379,7 @@ class Music():
 
 #region player cmds
     #TODO UNTESTED
-    async def seek(self, ctx: discord.ApplicationContext, timeCode: str = None):
+    async def seek(self, ctx: discord.Interaction, timeCode: str = None):
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
 
         if queue is None:
@@ -420,7 +420,7 @@ class Music():
 
 
     #TODO UNTESTED
-    async def pause(self, ctx: discord.ApplicationContext):
+    async def pause(self, ctx: discord.Interaction):
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
         
         if queue is not None:
@@ -437,7 +437,7 @@ class Music():
 
 
     #TODO UNTESTED
-    async def resume(self, ctx: discord.ApplicationContext):
+    async def resume(self, ctx: discord.Interaction):
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
         if queue is not None:
             if queue.is_paused():
@@ -453,7 +453,7 @@ class Music():
             return await ctx.respond("Selon les informations que je possède, il n'y a aucune lecture en cours sur ce serveur", ephemeral=True)
 
     #TODO UNTESTED
-    async def stop(self, ctx: discord.ApplicationContext):
+    async def stop(self, ctx: discord.Interaction):
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
         
         if queue.has_voice_client():
@@ -477,7 +477,7 @@ class Music():
 
 #region entry info
     #TODO UNTESTED
-    async def info(self, ctx: discord.ApplicationContext, index: int):
+    async def info(self, ctx: discord.Interaction, index: int):
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
 
         if queue is None:
@@ -568,7 +568,7 @@ class Music():
 
 
     #TODO UNTESTED
-    async def now_playing(self, ctx: discord.ApplicationContext):
+    async def now_playing(self, ctx: discord.Interaction):
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
         if queue is None or queue.cursor == queue.size:
             return await ctx.respond(
@@ -584,7 +584,7 @@ class Music():
 
 
 #region queue cmds
-    async def print_queue(self, ctx: discord.ApplicationContext, page:int = None):
+    async def print_queue(self, ctx: discord.Interaction, page:int = None):
 
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
         if queue is None:
@@ -694,7 +694,7 @@ class Music():
     
 
     
-    async def move(self, ctx: discord.ApplicationContext, frm: int, to: int):
+    async def move(self, ctx: discord.Interaction, frm: int, to: int):
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
         if queue is None:
             return await ctx.respond("Aucune liste de lecture", ephemeral=True)
@@ -715,7 +715,7 @@ class Music():
             return await ctx.respond("Une des deux positions est invalide", ephemeral=True)
 
 
-    async def remove(self, ctx: discord.ApplicationContext, idx1: int, idx2: int = None):
+    async def remove(self, ctx: discord.Interaction, idx1: int, idx2: int = None):
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
         
         if queue is None:
@@ -765,7 +765,7 @@ class Music():
 
 
     
-    async def skip(self, ctx: discord.ApplicationContext):
+    async def skip(self, ctx: discord.Interaction):
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
 
         if queue is not None:
@@ -786,7 +786,7 @@ class Music():
 
 
 
-    async def leave(self, ctx: discord.ApplicationContext):
+    async def leave(self, ctx: discord.Interaction):
         guild_id = ctx.guild.id
 
         guild_queue: Queue = QueueManager.get_queue(guild_id)
@@ -824,7 +824,7 @@ class Music():
         #     return await ctx.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
 
 
-    async def repeat(self, ctx: discord.ApplicationContext, mode: str):
+    async def repeat(self, ctx: discord.Interaction, mode: str):
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
 
         if queue is None:
@@ -858,7 +858,7 @@ class Music():
             return await ctx.respond(f"Le mode de répétition à été changé sur `{new_mode}`")
 
     
-    async def goto(self, ctx: discord.ApplicationContext, index: int):
+    async def goto(self, ctx: discord.Interaction, index: int):
         queue: Queue = QueueManager.get_queue(ctx.guild.id)
 
         if queue is None:
@@ -878,16 +878,16 @@ class Music():
                 await queue.start_playback()
             return  await ctx.respond(f"Direction la musique n°{index}")
         else:
-            return await ctx.respond(f"L'index {index} n'existe pas", ephemeral=True)
+            return await ctx.respond(f"L'index `{index}` n'est pas valide", ephemeral=True)
 
 
-    async def __vc_connection_test(self, ctx: discord.ApplicationContext) -> discord.VoiceClient:
+    async def __vc_connection_test(self, ctx: discord.Interaction) -> discord.VoiceClient:
         voice_client: discord.VoiceClient = ctx.voice_client
         if voice_client is None:
             pass
 
 
-    async def __initialize_queue(self, ctx: discord.ApplicationContext):
+    async def __initialize_queue(self, ctx: discord.Interaction):
         guild_id = ctx.guild.id
         new_queue: Queue = QueueManager.create_queue(guild_id, None, ctx.channel)
         print(f"[QUEUE.INIT] New queue added, attempting connection (GID:{guild_id})")
