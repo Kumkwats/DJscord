@@ -2,28 +2,36 @@
 """Entry point of the bot
 """
 import os
-import discord
+import traceback
 
+import discord
 from DJscordBot.config import config
 
 from DJscordBot.Commands.music import Music
 from DJscordBot.Commands.manage import Manage
 from DJscordBot.Commands.fun import Fun, chocolatine
+from DJscordBot.Commands.debug import Debug
+
+
 
 if __name__ == "__main__":
-    
-    print("[BOT] Setting up download folder...")
+
     if os.path.isdir(config.downloadDirectory): # Preparing download folder
+        print("[BOT] Cleaning up download folder...")
         for f in os.listdir(config.downloadDirectory):
             os.remove(config.downloadDirectory + f)
     else:
         os.makedirs(config.downloadDirectory)
+        print(f"[BOT] Created download folder in : {config.downloadDirectory}")
+
 
     intents = discord.Intents.default()
     intents.messages = True
     intents.message_content = True
 
+
     bot = discord.Bot(description="djscord !", intents=intents)
+    
     print("[BOT] Starting up...")
 
     #TODO make error send a message to the author ??
@@ -40,6 +48,29 @@ if __name__ == "__main__":
         print('----------------')
 
     @bot.event
+    async def on_connect():
+        print("[BOT.CONNECTION] Established connection with Discord")
+        pass
+    
+    @bot.event
+    async def on_disconnect():
+        print("[BOT.CONNECTION] Disconnected from Discord")
+        pass
+
+    # @bot.event
+    # async def on_error(event: str, *args, **kwargs):
+    #     print(f"[BOT.ERROR] An error happened on the event {event}\n" + 
+    #           f"\t args: {args}"+
+    #           f"\t kwargs: {kwargs}")
+    #     pass
+
+    @bot.event
+    async def on_resumed():
+        print("[BOT.SESSION] Session resumed")
+        pass
+
+
+    @bot.event
     async def on_message(message: discord.Message):
         """Called when a message is posted on any channel the bot is allowed to read
 
@@ -53,10 +84,18 @@ if __name__ == "__main__":
         await chocolatine(message)
 
     
+    #region commands
     musicCog = Music(bot)
     @bot.command(description="Jouer musique")
+    @commands.guild_only()
+    # @commandChecks.is_connected_to_vc
     async def play(ctx: discord.ApplicationContext, recherche: str):
-        await musicCog.play(ctx, recherche)
+        await musicCog.cmd_play(ctx, recherche)
+
+    @play.error
+    async def play_error(ctx: discord.ApplicationContext, error: discord.ApplicationCommandInvokeError):
+        print(traceback.print_exception(error.original))
+        return await ctx.respond(":warning: Une erreur est survenue pendant le traitement de la requète", ephemeral=True)
 
     @bot.command(description="Selection musique")
     async def goto(ctx: discord.ApplicationContext,
@@ -86,11 +125,11 @@ if __name__ == "__main__":
                         page: discord.Option(int,
                                              description="id de la page",
                                              min_value=1)):
-        await musicCog.queue(ctx, page)
+        await musicCog.print_queue(ctx, page)
 
     @queue.command(name="current", description="Affiche la *queue* autour de la lecture en cours")
     async def queue_current(ctx: discord.ApplicationContext):
-        await musicCog.queue(ctx)
+        await musicCog.print_queue(ctx)
 
     @queue.command(name="move", description="Déplace une musique")
     async def queue_move(ctx: discord.ApplicationContext,
@@ -152,6 +191,9 @@ if __name__ == "__main__":
     @bot.command(description="Est-ce que c'est pété ?")
     async def cpt(ctx: discord.ApplicationContext):
         await manageCog.cpt(ctx)
+    #endregion
 
-
+    # print("[BOT.COG] Added Debug Cog")
+    # bot.add_cog(Debug(bot))
+    # print("[BOT.RUN] Running the bot")
     bot.run(config.token)

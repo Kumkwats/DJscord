@@ -7,7 +7,7 @@ from discord.ext import commands, bridge
 
 from DJscordBot.config import config
 from DJscordBot.utils import pick_sound_file
-from DJscordBot.Commands.music import Queues
+from DJscordBot.Managers.queueManager import QueueManager
 
 class Manage():
     def __init__(self, bot: discord.Bot):

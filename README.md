@@ -1,5 +1,7 @@
 # DJscord
 
+Started as a fork of a friend [repository](https://github.com/yrigaudeau/my-discord-bot) to add some little features and bug fixes but then has become his own custom thing over the years.
+
 Made with Python 3.10.<br>
 Powerd by py-cord and yt-dlp.
 <br><br>
