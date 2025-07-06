@@ -11,7 +11,7 @@ import yt_dlp
 from DJscordBot.config import config
 from DJscordBot.ServiceProviders.common import CommonResponseData
 
-PLAYLIST_SIZE_LIMIT: int = 25
+PLAYLIST_SIZE_LIMIT: int = 100
 PROVIDER: str = 'youtube'
 DEFAULT_ASYNC_UPDATE_FREQ: float = 2
 

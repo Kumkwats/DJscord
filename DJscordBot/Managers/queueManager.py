@@ -43,17 +43,17 @@ class QueueManager():
         if guild_id not in cls.__queues:
             print(f"[QUEUE.REMOVE] guild({guild_id}) already removed")
             return
-        if not cls.__queues[guild_id].has_voice_client():
+        if not cls.__queues[guild_id].has_voice_client:
             cls.__queues.pop(guild_id)
             print(f"[QUEUE.REMOVE] Removed guild({guild_id}), had no VoiceClient")
             return
 
-        if not cls.__queues[guild_id].is_connected():
+        if not cls.__queues[guild_id].is_connected:
             cls.__queues.pop(guild_id)
             print(f"[QUEUE.REMOVE] Removed guild({guild_id}), had a VoiceClient but wasn't connected")
             return
         # Stop play if need
-        if cls.__queues[guild_id].is_playing():
+        if cls.__queues[guild_id].is_playing:
             await cls.__queues[guild_id].stop()
             print(f"[QUEUE.REMOVE] VoiceClient stoped in guild({guild_id}) ")
         await asyncio.sleep(0.6)
@@ -63,7 +63,7 @@ class QueueManager():
         print(f"[QUEUE.REMOVE] Disconnected in guild({guild_id})")
 
         await asyncio.sleep(0.2)
-        for entry in cls.__queues[guild_id].content:
+        for entry in cls.__queues[guild_id].entries:
             if entry.filename in os.listdir(config.downloadDirectory): #TODO implement waiting for process to stop using the file before trying to remove it
                 try:
                     os.remove(config.downloadDirectory + entry.filename) #If running on Windows, the file currently playing is not erased

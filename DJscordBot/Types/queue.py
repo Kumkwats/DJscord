@@ -11,20 +11,7 @@ from DJscordBot.config import config
 from DJscordBot.Types.entry import Entry
 from DJscordBot.utils import time_format
 
-
-
-class NextEntryCondition(Enum):
-    DEFAULT = -1
-    SEEK = 1
-    SKIP = 2
-    STOP = 3
-    RESUME = 4
-
-class RepeatMode(Enum):
-    NO_REPEAT = 0
-    ENTRY = 1
-    PLAYLIST = 2
-    ALL = 9
+from DJscordBot.Types.enums import RepeatMode, AfterEntryPlaybackAction
 
 
 
@@ -35,10 +22,17 @@ class RepeatMode(Enum):
 
 
 class Queue():
+    """
+    Class representing a queue of entries to be played in a Discord guild's voice channel.
+    With functions to manage the queue, playback, and voice channel.
+
+    """
     def __init__(self, guild_id: int, voice_client: discord.VoiceClient, text_channel: discord.TextChannel):
         self.guild_id: int = guild_id
-        self.content: list[Entry] = []
+        self.entries: list[Entry] = []
         
+        self.stopped: bool = True
+
         self.size: int  = 0
         self.cursor: int = 0
 
@@ -51,64 +45,94 @@ class Queue():
         self.last_voice_activity_time = time.time()
         self.__voice_client = voice_client
         self.text_channel = text_channel
-        self.repeat_mode: RepeatMode = RepeatMode.NO_REPEAT # none, entry, playlist, all
-        self.repeat_bypass: bool = False
+
+        self.repeat_mode: RepeatMode = RepeatMode.NONE # none, entry, playlist, all
+        self.dont_update_cursor_position: bool = False
+
         self.seek_time = -1
         self.is_other_source: bool = False
-        self.next_entry_condition: NextEntryCondition = NextEntryCondition.DEFAULT
+        
+        self.next_entry_condition: AfterEntryPlaybackAction = AfterEntryPlaybackAction.DEFAULT
 
         # self.__is_processing_request = False
 
 
-    #Voice Channel
-    def get_voice_channel(self) -> discord.VoiceChannel:
-        if not self.has_voice_client():
+    
+            
+    @property
+    def current_entry_index(self) -> int:
+        if not self.ended and not self.stopped:
+            return self.cursor
+
+    @property
+    def current_playing_entry(self) -> Entry:
+        if not self.ended and not self.stopped:
+            return self.entries[self.cursor]
+    
+
+
+    #region Voice
+    @property
+    def has_voice_client(self) -> bool:
+        return self.__voice_client is not None
+
+    @property
+    def voice_channel(self) -> discord.VoiceChannel:
+        if not self.has_voice_client:
             print("[Queue.Get_Voice_Channel] voice_client is None")
             return None
         return self.__voice_client.channel
-    
-    def has_voice_client(self) -> bool:
-        return self.__voice_client is not None
+    #endregion
     
 
     #region Status
+    @property
     def is_connected(self) -> bool:
-        if not self.has_voice_client():
+        if not self.has_voice_client:
             print("[Queue.Is_Connected] voice_client is None")
             return False
         return self.__voice_client.is_connected()
 
+    @property
     def is_playing(self) -> bool:
-        if not self.has_voice_client():
+        if not self.has_voice_client:
             print("[Queue.Is_Playing] voice_client is None")
             return False
         return self.__voice_client.is_playing()
     
+    @property
     def is_paused(self) -> bool:
-        if not self.has_voice_client():
+        if not self.has_voice_client:
             print("[Queue.Is_Paused] voice_client is None")
             return False
         return self.__voice_client.is_paused()
+    
+    @property
+    def ended(self) -> bool:
+        return self.cursor >= self.size
     #endregion
 
     #region voice client functions
     def pause(self):
-        if not self.has_voice_client():
+        if not self.has_voice_client:
             print("[Queue.Pause] voice_client is None")
             return
         self.__voice_client.pause()
 
-    def pause(self):
-        if not self.has_voice_client():
+    def resume(self):
+        if not self.has_voice_client:
             print("[Queue.Resume] voice_client is None")
             return
         self.__voice_client.resume()
 
+    #TODO ERRORS
+    #- Stop doesn't really stop
     def stop(self):
-        if not self.has_voice_client():
+        if not self.has_voice_client:
             print("[Queue.Stop] voice_client is None")
             return
         self.__voice_client.stop()
+
 
 
 
@@ -152,16 +176,16 @@ class Queue():
 
     #Playback
     async def start_playback(self, timestart: int = 0, supress_output: bool = False):
-        if not self.is_connected():
+        if not self.is_connected:
             print("[PLAYBACK.START.ERROR] Voice client is not connected, cannot start playback !")
             return await self.text_channel.send(f"Le Didjé a essayé de lancer une musique alors qu'il est apparemment pas connecté")
 
-        if self.is_playing():
+        if self.is_playing:
             print("[PLAYBACK.START.ERROR] Voice client is already, we won't start another playback !")
             return await self.text_channel.send(f"Le Didjé a essayé de lancer une musique alors qu'une autre est en cours")
 
 
-        entry: Entry = self.content[self.cursor]
+        entry: Entry = self.entries[self.cursor]
         if entry.size != 0:
             filename: str = config.downloadDirectory + entry.filename
             if not os.path.exists(filename):
@@ -187,6 +211,7 @@ class Queue():
             before_options = before,
             options = "-vn")
         
+        self.stopped = False
         self.__voice_client.play(
             player,
             after=lambda e: self.__on_after_play())
@@ -200,17 +225,16 @@ class Queue():
                 await self.text_channel.send(f"Maintenant en lecture : {entry.title}")
 
     def __on_after_play(self):
-        if self.next_entry_condition is NextEntryCondition.SEEK:
+        if self.next_entry_condition is AfterEntryPlaybackAction.SEEK:
             print(f"[QUEUE.AFTER_PLAY] on_after_play >> seek (GID:{self.guild_id})")
             return self.__play_seek()
         
-        elif self.next_entry_condition is NextEntryCondition.STOP:
-            #restore to defaults
-            self.next_entry_condition = NextEntryCondition.DEFAULT
-            self.seek_time = -1
-            self.repeat_bypass = False
+        elif self.next_entry_condition is AfterEntryPlaybackAction.STOP:
+            if not self.dont_update_cursor_position:
+                self.__update_cursor_for_next_entry()
 
             print(f"[QUEUE.AFTER_PLAY] on_after_play >> stop (GID:{self.guild_id})")
+            self.__stop_reset_play_status()
             return
         # elif self.next_entry_condition is NextEntryCondition.RESUME:
         #     pass
@@ -218,55 +242,67 @@ class Queue():
         print(f"[QUEUE.AFTER_PLAY] on_after_play >> next entry (GID:{self.guild_id})")
         self.__play_next()
 
-        self.next_entry_condition = NextEntryCondition.DEFAULT
+        self.next_entry_condition = AfterEntryPlaybackAction.DEFAULT
         self.seek_time = -1
-        self.repeat_bypass = False
+        self.dont_update_cursor_position = False
         pass
 
-    def __play_next(self):
-        if self.repeat_bypass is False:
-            if self.repeat_mode == RepeatMode.NO_REPEAT:
-                self.cursor = self.cursor + 1
-            elif self.repeat_mode == RepeatMode.ENTRY:
-                pass
-            elif self.repeat_mode == RepeatMode.ALL:
-                if self.cursor == self.size - 1:
-                    self.cursor = 0
-                else:
-                    self.cursor = self.cursor + 1
-            elif self.repeat_mode == RepeatMode.PLAYLIST:
-                def gotostart():
-                    i = self.cursor-1
-                    while self.content[i].playlist is not None and i >= 0:
-                        if self.content[i].playlist.id == current_entry.playlist.id:
-                            i = i-1
-                        else:
-                            break
-                    self.cursor = i
 
-                current_entry = self.content[self.cursor]
-                if current_entry.playlist.id is not None:
-                    if self.cursor < self.size-1:
-                        if self.content[self.cursor+1].playlist is not None:
-                            if self.content[self.cursor+1].playlist.id != current_entry.playlist.id:
-                                gotostart()
-                        else:
+
+    def __update_cursor_for_next_entry(self):
+        if self.repeat_mode == RepeatMode.NONE:
+            self.cursor = self.cursor + 1
+        elif self.repeat_mode == RepeatMode.ENTRY:
+            pass
+        elif self.repeat_mode == RepeatMode.QUEUE:
+            if self.cursor == self.size - 1:
+                self.cursor = 0
+            else:
+                self.cursor = self.cursor + 1
+        elif self.repeat_mode == RepeatMode.PLAYLIST:
+            def gotostart():
+                i = self.cursor-1
+                while self.entries[i].playlist is not None and i >= 0:
+                    if self.entries[i].playlist.id == current_entry.playlist.id:
+                        i = i-1
+                    else:
+                        break
+                self.cursor = i
+
+            current_entry = self.entries[self.cursor]
+            if current_entry.playlist.id is not None:
+                if self.cursor < self.size-1:
+                    if self.entries[self.cursor+1].playlist is not None:
+                        if self.entries[self.cursor+1].playlist.id != current_entry.playlist.id:
                             gotostart()
-                    elif self.cursor == self.size - 1:
+                    else:
                         gotostart()
+                elif self.cursor == self.size - 1:
+                    gotostart()
 
-                self.cursor = self.cursor + 1
+            self.cursor = self.cursor + 1
+
+
+
+    def __play_next(self):
+        if not self.dont_update_cursor_position:
+            self.__update_cursor_for_next_entry()
+            
 
         # defaulting class variables for next uses
         self.seek_time = -1
-        self.repeat_bypass = False
-        if self.cursor < self.size:
+        self.dont_update_cursor_position = False
+        if not self.ended:
             coro = self.start_playback()
             fut = asyncio.run_coroutine_threadsafe(coro, self.__voice_client.loop)
             try:
                 fut.result()
             except Exception:
                 print(f"[ERROR] play_next(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
+        else:
+            print("[PLAYBACK.PLAY_NEXT] End of queue")
+            self.__stop_reset_play_status()
+            
 
 
     def __play_seek(self):
@@ -278,15 +314,25 @@ class Queue():
         # defaulting class variables for next uses
         self.seek_time = -1
 
-        if self.cursor < self.size:
+        if not self.ended:
             coro = self.start_playback(timestart = starting_time)
             fut = asyncio.run_coroutine_threadsafe(coro, self.__voice_client.loop)
             try:
                 fut.result()
             except Exception:
                 print(f"[ERROR] play_seek(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
+        else:
+            print("[PLAYBACK.PLAY_NEXT] Attempted seek at queue but it's at the end, ignoring...")
+            self.__stop_reset_play_status()
 
 
+    def __stop_reset_play_status(self):
+        #restore to defaults
+        self.stopped = True
+        self.next_entry_condition = AfterEntryPlaybackAction.DEFAULT
+        self.seek_time = -1
+        self.dont_update_cursor_position = False
+        print("[PLAYBACK.STOP] playback stopped, and setting status to stopped")
 
 
     async def add_entry(self, entry: Entry, position: int = None) -> int:
@@ -294,11 +340,11 @@ class Queue():
         if position is None or position == self.size:
             if not entry.is_ready:
                 return -1
-            self.content.append(entry)
+            self.entries.append(entry)
         else:
             if not entry.is_ready:
                 return -1
-            self.content.insert(position, entry)
+            self.entries.insert(position, entry)
 
         self.size = self.size + 1
         if self.size == self.cursor + 1:
@@ -307,12 +353,12 @@ class Queue():
         return position or self.size-1
 
     def move_entry(self, frm: int, to: int):
-        entry = self.content[frm]
-        self.content.pop(frm)
-        self.content.insert(to, entry)
+        entry = self.entries[frm]
+        self.entries.pop(frm)
+        self.entries.insert(to, entry)
 
     def remove_entry(self, index: int):
-        self.content.pop(index)
+        self.entries.pop(index)
         self.size = self.size - 1
 
 
@@ -320,9 +366,9 @@ class Queue():
 
 
     def get_index(self, entry: Entry) -> int:
-        return self.content.index(entry)
+        return self.entries.index(entry)
 
     def get_entry(self, index: int) -> Entry:
-        return self.content[index]
+        return self.entries[index]
     
 

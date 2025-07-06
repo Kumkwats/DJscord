@@ -3,13 +3,14 @@ import asyncio
 import time
 
 import discord
-from discord.ext import tasks, commands
+from discord.ext import tasks
 
 from DJscordBot.djscordBot import DJscordBot
 from DJscordBot.Managers.queueManager import QueueManager
 from DJscordBot.discord.utils import InteractionWrapper, EmbedBuilder
-from DJscordBot.Types.queue import Queue, NextEntryCondition, RepeatMode
-from DJscordBot.Types.entry import Entry
+from DJscordBot.Types.entry import Entry, EntryPlaylist
+from DJscordBot.Types.queue import Queue
+from DJscordBot.Types.enums import AfterEntryPlaybackAction, RepeatMode
 from DJscordBot.utils import time_format, pick_sound_file
 from DJscordBot.config import config
 
@@ -33,22 +34,13 @@ class Music():
     
 #region To sort
     @staticmethod
-    def author_voice_is_connected(ctx: InteractionWrapper) -> bool:
-        if ctx.author.voice is None: # Not connected
-            print(f"[CONNECT.ERROR] no author_voice, cannot connect (GID:{ctx.guild_id})")
+    def author_voice_is_connected(interac_wrapper: InteractionWrapper) -> bool:
+        if interac_wrapper.author.voice is None: # Not connected
+            print(f"[CONNECT.ERROR] no author_voice, cannot connect (GID:{interac_wrapper.guild.id})")
             return False
         return True
 
-    # async def searchAndPlay(self, ctx: discord.Interaction, search_query: str):
-    #     print(f"[QUERY.PROCESS.SEARCH] begin youtube search with query: \"{search_query}\" (GID:{discordUserResponse.guildID})")
-    #     result = await self.youtube_process_search(cmd_query, discordUserResponse)
-    #     try:
-    #         data = result
-    #         print(f"[YOUTUBE.SUCCESS] found link \"{(result['webpage_url'])}\" | (GID:{discordUserResponse.guildID})")
-    #     except Exception:
-    #         print(f"[YOUTUBE.ERROR] link check failed\n\n{traceback.format_exc()} | (GID:{discordUserResponse.guildID})")
-    #         return await discordUserResponse.WriteUserResponse('Une erreur est survenue lors de la vérification du lien')
-    #     return await self.youtube_process_final(result)
+
 
 #endregion
 
@@ -59,19 +51,19 @@ class Music():
 
 
 #region CMD
-    async def cmd_play(self, ctx: InteractionWrapper, cmd_query: str):
-        await ctx.defer(ephemeral=True)
+    async def cmd_play(self, interac_wrapper: InteractionWrapper, cmd_query: str):
+        await interac_wrapper.think(ephemeral=True)
         
-        guild_id = ctx.guild.id
+        guild_id = interac_wrapper.guild.id
 
-        if not self.author_voice_is_connected(ctx): # Not connected
+        if not self.author_voice_is_connected(interac_wrapper): # Not connected
             print(f"[CONNECT.ERROR] no author_voice, cannot connect (GID:{guild_id})")
-            return await ctx.respond_once_only(
+            return await interac_wrapper.respond(
                 "Vous devez être connecté à un salon vocal pour pouvoir ajouter de la musique",
                 ephemeral=True)
 
         
-        discordUserResponse: InteractionWrapper = InteractionWrapper(ctx)
+        # discordUserResponse: InteractionWrapper = InteractionWrapper(ctx)
 
         
         #New Guild
@@ -80,15 +72,15 @@ class Music():
             new_voice_client: discord.VoiceClient = None
             print(f"[QUEUE.NEW.CONNECT.VC] New queue, attempting connection... (GID:{guild_id})")
             try:
-                new_voice_client = await ctx.author.voice.channel.connect(timeout=60)
+                new_voice_client = await interac_wrapper.author.voice.channel.connect(timeout=60)
             except discord.ClientException as cEx:
                 print(f"[CONNECT.VC.EXCEPTION] unable to connect to VC:\n{cEx}")
-                return await discordUserResponse.whisper_to_author("Une erreur est survenue lors de la connection au channel vocal")
+                return await interac_wrapper.whisper_to_author("Une erreur est survenue lors de la connection au channel vocal")
 
             if new_voice_client is None:
                 print(f"[CONNECT.VC.EXCEPTION] VC is None")
 
-            queue = QueueManager.create_queue(guild_id, new_voice_client, ctx.context.channel)
+            queue = QueueManager.create_queue(guild_id, new_voice_client, interac_wrapper.interaction.channel)
             boot_entry = self.__create_boot_entry()
             if boot_entry is not None:
                 queue.add_entry(boot_entry)
@@ -98,23 +90,23 @@ class Music():
         #Existing queue checks
         else:
             print(f"[QUEUE] existing queue, checking voice status (GID:{guild_id})")
-            if not queue.is_connected():
+            if not queue.is_connected:
                 print(f"[VOICE.STATUS] voice client not connected, reconnecting (GID:{guild_id})")
                 try:
-                    await queue.connect(ctx.author.voice.channel)
+                    await queue.connect(interac_wrapper.author.voice.channel)
                 except discord.ClientException as cEx:
                     print(f"[CONNECT.ERROR] unable to connect to VC:\n{cEx}")
-                if queue.is_connected():
+                if queue.is_connected:
                     print(f"[VOICE.SUCCESS] voice client reconnected (GID:{guild_id})")
                 else:
                     print(f"[VOICE.ERROR] voice client unable to reconnect, aborting and removing guild (GID:{guild_id})")
                     QueueManager.remove_queue(guild_id)
-                    return await ctx.respond("Une erreur est survenu, je n'ai pas réussi à me reconnecter... veuillez réessayer ultérieurement")
+                    return await interac_wrapper.respond("Une erreur est survenu, je n'ai pas réussi à me reconnecter... veuillez réessayer ultérieurement")
                     
-            voice_channel_queue = queue.get_voice_channel()
-            if voice_channel_queue is not None and ctx.author.voice.channel != voice_channel_queue:
-                await queue.move(ctx.author.voice.channel)
-                print(f"[QUEUE.UPDATE.USER_HAS_MOVED] moved to new channel : {ctx.author.voice.channel} (GID:{guild_id})")
+            voice_channel_queue = queue.voice_channel
+            if voice_channel_queue is not None and interac_wrapper.author.voice.channel != voice_channel_queue:
+                await queue.move(interac_wrapper.author.voice.channel)
+                print(f"[QUEUE.UPDATE.USER_HAS_MOVED] moved to new channel : {interac_wrapper.author.voice.channel} (GID:{guild_id})")
         
         # print("Guild (%d): Connected to %s (number of members: %d)" % (guild, Queues[guild].voice_client.channel.name, len(Queues[guild].voice_client.channel.members)))
 
@@ -122,352 +114,102 @@ class Music():
         
 
 
-        play_cmd_transaction: MusicPlayCommandTransaction = MusicPlayCommandTransaction(ctx, self.bot)
+        play_cmd_transaction: MusicPlayCommandTransaction = MusicPlayCommandTransaction(interac_wrapper, self.bot)
         return await play_cmd_transaction.process_query(cmd_query)
 
-#         # Query sanitizing
-#         print(f"[QUERY.PROCESS] begin query processing on \"{cmd_query}\" (GID:{guild_id})")
-#         # Append HTTPS to the link sent
-#         if cmd_query.startswith("www."):
-#             cmd_query = "https://" + cmd_query
 
-#         queryType: PlayQueryType = self.analyse_query_type(cmd_query)
-
-
-# #region Play_Spotify
-#         if queryType is PlayQueryType.LINK_SPOTIFY:
-#             if not config.spotifyEnabled:
-#                 print(f"[SPOTIFY.DISABLED] Spotify research is disabled (GID:{guild_id})")
-#                 return await ctx.respond(
-#                     "La recherche Spotify n'est pas active",
-#                     ephemeral = True)
-            
-#             print(f"[QUERY.PROCESS.SPOTIFY] begin spotify process on {cmd_query} (GID:{discordUserResponse.guild_ID})")
-#             (is_spot_process_success, spot_process_return_string) = await self.spotify_process_url(cmd_query)
-
-#             if not is_spot_process_success:
-#                 return await ctx.respond(spot_process_return_string, ephemeral=True)
-            
-#             # spotify_result_type = self.analyse_query_type(spot_process_return_string)
-#             # found_yt: bool = False
-#             # if spotify_result_type is PlayQueryType.LINK_YOUTUBE:
-#             #     #link gathered from song.link API
-#             #     print(f"[QUERY.PROCESS.SPOTIFY.LINK] begin process of youtube link \"{spot_process_return_string}\" (GID:{discordUserResponse.guildID})")
-#             #     await discordUserResponse.WriteUserResponse(f"Investigation sur \"{spot_process_return_string}\"...")
-#             #     result = await self.youtube_process_link(spot_process_return_string)
-#             #     found_yt = result is not None
-#             #     if not found_yt:
-#             #         # retry with query search
-#             #         (is_spot_process_success, spot_process_return_string) =  self.spotify_process_url(cmd_query, True)
-#             #         if not is_spot_process_success:
-#             #             return await ctx.respond(spot_process_return_string, ephemeral=True)
-#             #         spotify_result_type = self.analyse_query_type(spot_process_return_string)
-
-
-#             # if spotify_result_type is PlayQueryType.SEARCH_QUERY:
-#             #     #has fallback to 'lazy' youtube search
-#             #     print(f"[QUERY.PROCESS.SPOTIFY.SEARCH] begin youtube search with query: \"{spot_process_return_string}\" (GID:{discordUserResponse.guildID})")
-#             #     await discordUserResponse.WriteUserResponse(f"Recherche de \"{spot_process_return_string}\"...")
-#             #     result = await self.youtube_process_search(spot_process_return_string)
-#             # else:
-#             #     print(f"[QUERY.PROCESS.SPOTIFY.ERROR] a link_conversion_fail happened on spotify_process of query: ({cmd_query})." +
-#             #             f"\n\tProcess result is {spot_process_return_string} and new query type is {spotify_result_type.name} | (GID:{guild_id})")
-#             #     return await ctx.respond("Une erreur est survenue lors du traitement du lien spotify (`link_conversion_fail`)", ephemeral=True)
-#             if result is None:
-#                 return await discordUserResponse.whisper_to_author("La recherche a échoué")
-#             await discordUserResponse.whisper_to_author(f"Vidéo trouvée : **{(result['title'])}** de {(result['channel'])}, téléchargement...")
-#             #TODO Download
-
-# #endregion
-
-
-#         elif queryType is PlayQueryType.LINK_YOUTUBE:
-#             print(f"[QUERY.PROCESS.YOUTUBE.LINK] begin process of youtube link \"{yt_link}\" (GID:{discordUserResponse.guild_ID})")
-#             result = await self.youtube_process_link(cmd_query)
-#             try:
-#                 data = result
-#                 print(f"[YOUTUBE.SUCCESS] found link \"{(result['webpage_url'])}\" | (GID:{discordUserResponse.guild_ID})")
-#             except Exception:
-#                 print(f"[YOUTUBE.ERROR] link check failed\n\n{traceback.format_exc()} | (GID:{discordUserResponse.guild_ID})")
-#                 return await discordUserResponse.whisper_to_author('Une erreur est survenue lors de la vérification du lien')
-#             return await self.youtube_process_final(result)
-        
-#         elif queryType is PlayQueryType.SEARCH_QUERY:
-#             print(f"[QUERY.PROCESS.SEARCH] begin youtube search with query: \"{search_query}\" (GID:{discordUserResponse.guild_ID})")
-#             result = await self.youtube_process_search(cmd_query, discordUserResponse)
-#             try:
-#                 data = result
-#                 print(f"[YOUTUBE.SUCCESS] found link \"{(result['webpage_url'])}\" | (GID:{discordUserResponse.guild_ID})")
-#             except Exception:
-#                 print(f"[YOUTUBE.ERROR] link check failed\n\n{traceback.format_exc()} | (GID:{discordUserResponse.guild_ID})")
-#                 return await discordUserResponse.whisper_to_author('Une erreur est survenue lors de la vérification du lien')
-#             return await self.youtube_process_final(result)
-
-#         elif queryType is PlayQueryType.OTHER_STREAM:
-#             new_entry = self.other_stream_process(cmd_query, discordUserResponse)
-#             if new_entry is not None:
-#                 position = await queue.add_entry(new_entry)
-#                 return await ctx.respond(
-#                     f"{position}: {cmd_query} a été ajouté à la file d\'attente",
-#                     ephemeral=True)
-#             else:
-#                 print(f"[QUERY.PROCESS.OTHER.ERROR] An error happened while creating entry for ({cmd_query}) | (GID:{guild_id})")
-#                 return await ctx.respond("Une erreur est survenue lors du traitement du lien (`entry_creation_fail`)", ephemeral=True)
-
-
-#         else:
-#             print(f"[QUERY.PROCESS.ERROR] error on creating entry for ({cmd_query}) | (GID:{guild_id})")
-#             return await ctx.respond("Une erreur est survenue lors du traitement de la requête (`unknown_type_error`)", ephemeral=True)
-
-
-
-#end region
-
-    
-
-#region old code
-        # Other streams
-        # if (cmd_query.startswith("http") or cmd_query.startswith("udp://")) and not cmd_query.startswith(("https://youtu.be", "https://www.youtube.com", "https://youtube.com")):
-        #     print(f"[QUERY.PROCESS.OTHER] query \"{cmd_query}\" is another type of stream, may not work  (GID:{guild})")
-        #     entry = Entry(cmd_query, ctx.author)
-        #     entry.BuildMetaDataOtherStreams(cmd_query)
-        #     position = await queue.add_entry(entry)
-        #     return await ctx.respond(
-        #         f"{position}: {cmd_query} a été ajouté à la file d\'attente",
-        #         ephemeral=True)
-        
-        
-        # YouTube Search
-        # else:
-        #     # Search query
-        #     print(f"[QUERY.PROCESS.YOUTUBE] begin youtube processing on \"{cmd_query}\" (GID:{guild})")
-        #     if not cmd_query.startswith("https://"):
-        #         print(f"[YOUTUBE.SEARCH] begin youtube search with \"{cmd_query}\" (GID:{guild})")
-        #         # message: discord.WebhookMessage = await ctx.respond(
-        #         #     f"Recherche de \"{query}\"...",
-        #         #     ephemeral=True)
-        #         await discordUserResponse.WriteUserResponse(f"Recherche de \"{cmd_query}\"...")
-        #         found: bool = False
-        #         result = None
-        #         # # Méthode youtube-search-python
-        #         # try:
-        #         #     result = await Youtube.searchVideos_YSP(query)
-        #         #     if result is not None:
-        #         #         found = True
-        #         # except Exception:
-        #         #     print("[YSP.SEARCH.ERROR] ysp.Search failed to find music, falling back to yt-dlp (GID:{guild})")
-        #         #     # print(f"[FAILED SEARCH] ysp.Search failed to find music\n\n{traceback.format_exc()}")
-        #         if not found:
-        #             try:
-        #                 result = await Youtube.searchVideosYT_DLP(cmd_query)
-        #                 if result is not None:
-        #                     found = True
-        #             except Exception:
-        #                 print(f"[YT-DLP.SEARCH.ERROR] yt-dlp.Search failed to find music (GID:{guild})\n\n{traceback.format_exc()}")
-
-        #         if not found:
-        #             return await discordUserResponse.WriteUserResponse("La recherche a échoué")
-        #             # return await message.edit(content="La recherche a échoué")
-        #         await discordUserResponse.WriteUserResponse(f"Vidéo trouvée : **{(result['title'])}** de {(result['channel'])}, téléchargement...")
-        #         # await message.edit(content=f"Vidéo trouvée : **{(result['title'])}** de {(result['channel'])}, téléchargement...")
-
-        #         # url = result["webpage_url"]
-        #         # print(url)
-        #     # Youtube Link
-        #     else:
-        #         print(f"[YOUTUBE.LINK] begin youtube search on link \"{cmd_query}\" (GID:{guild})")
-        #         await discordUserResponse.WriteUserResponse(f"Investigation sur le lien \"{(cmd_query[len('https://'):])}\"...")
-        #         # message: discord.WebhookMessage = await ctx.respond(
-        #         #     f"Investigation sur le lien \"{(query[len('https://'):])}\"...",
-        #         #     ephemeral=True)
-        #         result = await Youtube.searchVideosYT_DLP(cmd_query)
-
-        #     try:
-        #         # data = await Youtube.fetchData(url, self.bot.loop)
-        #         data = result
-        #         print(f"[YOUTUBE.SUCCESS] found link \"{(result['webpage_url'])}\" (GID:{guild})")
-        #     except Exception:
-        #         print(f"[YOUTUBE.ERROR] link check failed\n\n{traceback.format_exc()} (GID:{guild})")
-        #         return await discordUserResponse.WriteUserResponse('Une erreur est survenue lors de la vérification du lien')
-        #         # return await message.edit('Une erreur est survenue lors de la vérification du lien')
-
-
-
-
-
-        #     applicant = ctx.author
-
-        #     if 'entries' in data:
-        #         print(f"[YOUTUBE.PLAYLIST] playlist detected, extracting every entries (GID:{guild})")
-        #         playlist = Playlist()
-        #         playlist.buildMetadataYoutube(data)
-        #         queue_start = Queues[guild].size
-        #         for i in range(len(data['entries'])):
-        #             if data['entries'][i] is not None:
-        #                 if data['entries'][i]['is_live'] is True:
-        #                     filename = data['entries'][i]['url']
-        #                     file_size = 0
-        #                 else:
-        #                     try:
-        #                         filename = Youtube.getFilename(data['entries'][i])
-        #                         text = f"({i+1}/{len(data['entries'])}) Téléchargement de {data['entries'][i]['title']}..."
-        #                         await Youtube.downloadAudio(
-        #                             data['entries'][i]['webpage_url'],
-        #                             discordUserResponse.message,
-        #                             text,
-        #                             self.bot.loop),
-                            
-        #                     except Exception:
-        #                         print(f"[YOUTUBE.DOWNLOAD.ERROR] unable to download {data['entries'][i]['title']} (GID:{guild})\n\n{traceback.format_exc()}")
-        #                         await discordUserResponse.WriteUserResponse(f"({i+1}/{len(data['entries'])}) Erreur lors du téléchargement de {data['entries'][i]['title']}")
-        #                         # await message.edit(content=f"({i+1}/{len(data['entries'])}) Erreur lors du téléchargement de {data['entries'][i]['title']}")
-        #                         continue
-
-        #                     file_size = os.path.getsize(config.downloadDirectory + filename)
-
-
-        #                 if Queues[guild].voice_client.is_connected():
-        #                     entry = Entry(filename, applicant, file_size, playlist)
-        #                     entry.buildMetadataYoutube(data['entries'][i])
-        #                     position = await queue.add_entry(entry, queue_start + i)
-        #                     #TODO bug when stopping the bot while a playlist is currently added in the queue, the bot will resume by itself by adding the next track to the queue
-        #                     if i == len(data['entries']) - 1:
-        #                         await discordUserResponse.WriteUserResponse(f"{data['title']} a été ajouté à la file d\'attente")
-        #                         # await message.edit(content=f"{data['title']} a été ajouté à la file d\'attente")
-        #                     else:
-        #                         await discordUserResponse.WriteUserResponse(f"({i+1}/{len(data['entries'])}) {position}: {data['entries'][i]['title']} a été ajouté à la file d\'attente")
-        #                         # await message.edit(content=f"({i+1}/{len(data['entries'])}) {position}: {data['entries'][i]['title']} a été ajouté à la file d\'attente")
-        #                 else:
-        #                     await discordUserResponse.WriteUserResponse("Téléchargement annulé")
-        #                     # await message.edit(content="Téléchargement annulé")
-        #                     break
-        #     else:
-        #         if data['is_live'] is True:
-        #             filename = data['url']
-        #             file_size = 0
-        #         else:
-        #             try:
-        #                 await discordUserResponse.WriteUserResponse(f"Vidéo trouvée : **{(result['title'])}**")
-        #                 # await message.edit(content=f"Vidéo trouvée : **{(result['title'])}**")
-        #                 filename = Youtube.getFilename(data)
-        #                 text = f"Téléchargement de {data['title']}..."
-        #                 await Youtube.downloadAudio(
-        #                     data['webpage_url'],
-        #                     discordUserResponse.message,
-        #                     text,
-        #                     self.bot.loop)
-        #                 file_size = os.path.getsize(config.downloadDirectory + filename)
-        #             except Exception:
-        #                 print(f"[YOUTUBE.DOWNLOAD.ERROR] unable to download {data['title']} (GID:{guild})\n\n{traceback.format_exc()}")
-        #                 return await discordUserResponse.WriteUserResponse(f"Erreur lors du téléchargement de {data['title']}")
-        #                 #return await message.edit(content=f"Erreur lors du téléchargement de {data['title']}")
-                    
-
-        #         if Queues[guild].voice_client.is_connected():
-        #             entry = Entry(filename, applicant, file_size)
-        #             entry.buildMetadataYoutube(data)
-        #             position = await queue.add_entry(entry)
-        #             await discordUserResponse.WriteUserResponse(f"{position}: {data['title']} a été ajouté à la file d\'attente")
-        #             # await message.edit(content=f"{position}: {data['title']} a été ajouté à la file d\'attente")
-        #             await ctx.send(f"{ctx.author.display_name} a ajouté une musique…")
-        #         else:
-        #             print(f"[CONNECT.ERROR] Trying to add music but voice_client is not connected (GID:{guild})")
-
-#endregion
 
 
 
 #region player cmds
-    #TODO UNTESTED
-    async def seek(self, ctx: discord.Interaction, timeCode: str = None):
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
+    async def seek(self, interac_wrapper: InteractionWrapper, timeCode: str = None):
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
 
-        if queue is None:
-            return await ctx.respond("Pas de lecture en cours", ephemeral=True)
+        if queue is None or queue.stopped:
+            return await interac_wrapper.respond("Pas de lecture en cours", ephemeral=True)
 
-        currentEntry = queue.content[queue.cursor]
+        currentEntry = queue.entries[queue.cursor]
         if currentEntry.duration <= 0:
-            return await ctx.respond("Ce morceau n'est pas seekable", ephemeral=True)
+            return await interac_wrapper.respond("Ce morceau n'est pas seekable", ephemeral=True)
 
         #Decoding timeCode
         try:
             time = list(map(int, timeCode.split(":")))[::-1]
         except:
-            return await ctx.respond("Quelque chose ne va pas dans la syntaxe (doit être hhhh:mm:ss ou mmmm:ss ou bien ssss)", ephemeral=True)
+            return await interac_wrapper.respond("Quelque chose ne va pas dans la syntaxe (doit être hhhh:mm:ss ou mmmm:ss ou bien ssss)", ephemeral=True)
         (secs, mins, hrs) = (0,0,0)
         secs = time[0]
         if len(time) > 1:
             if 0 <= secs < 60:
                 mins = time[1]
             else: #TODO specify error
-                return await ctx.respond("Le temps n'est pas conforme", ephemeral=True)
+                return await interac_wrapper.respond("Le temps n'est pas conforme", ephemeral=True)
             if len(time) > 2:
                 if  0 <= mins < 60:
                     hrs = time[2]
                 else:
-                    return await ctx.respond("Le temps n'est pas conforme", ephemeral=True)
+                    return await interac_wrapper.respond("Le temps n'est pas conforme", ephemeral=True)
                 if hrs < 0:
-                    return await ctx.respond("Le temps n'est pas conforme", ephemeral=True)
+                    return await interac_wrapper.respond("Le temps n'est pas conforme", ephemeral=True)
         desiredStart = secs + 60*mins + 60*60*hrs
         
         if 0 <= desiredStart < currentEntry.duration -1:
-            queue.next_entry_condition = NextEntryCondition.SEEK
+            queue.next_entry_condition = AfterEntryPlaybackAction.SEEK
             queue.seek_time = desiredStart
             queue.stop()
-            return await ctx.respond(f"Utilisation de Seek:tm: !", ephemeral=True) #TODO better response
+            return await interac_wrapper.respond(f"Utilisation de Seek:tm: !", ephemeral=True) #TODO better response
         else:
-            return await ctx.respond(f"La vidéo sera déjà finie à {time_format(desiredStart)}...", ephemeral=True)
+            return await interac_wrapper.respond(f"La vidéo sera déjà finie à {time_format(desiredStart)}...", ephemeral=True)
 
 
-    #TODO UNTESTED
-    async def pause(self, ctx: discord.Interaction):
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
+
+    async def pause(self, interac_wrapper: InteractionWrapper):
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
         
         if queue is not None:
-            if queue.is_playing():
+            if queue.is_playing:
                 queue.pause()
                 queue.pausetime = time.time()
                 print(f"[MUSIC.PAUSE] paused listening (GID:{queue.guild_id})")
-                return await ctx.respond("Lecture mise en pause")
+                return await interac_wrapper.respond("Lecture mise en pause")
             else:
-                return await ctx.respond("Lecture déjà en pause !", ephemeral=True)
+                return await interac_wrapper.respond("Lecture déjà en pause !", ephemeral=True)
         else:
             print(f"[MUSIC.PAUSE.ERROR] pause() called but not in the registered guilds (GID:{queue.guild_id})")
-            return await ctx.respond("Selon les informations que je possède, il n'y a aucune lecture en cours sur ce serveur", ephemeral=True)
+            return await interac_wrapper.respond("Selon les informations que je possède, il n'y a aucune lecture en cours sur ce serveur", ephemeral=True)
 
 
-    #TODO UNTESTED
-    async def resume(self, ctx: discord.Interaction):
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
+    async def resume(self, interac_wrapper: InteractionWrapper):
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
         if queue is not None:
-            if queue.is_paused():
+            if queue.is_paused:
                 queue.resume()
                 queue.starttime = time.time() - (queue.pausetime - queue.starttime) # Setting starttime to the correct time to ensure that the time elapsed on the entry is correct when resuming
                 queue.pausetime = 0
                 print(f"[MUSIC.RESUME] resumed listening (GID:{queue.guild_id})")
-                return await ctx.respond("Reprise de la lecture")
+                return await interac_wrapper.respond("Reprise de la lecture")
             else:
-                return await ctx.respond("On est déjà en lecture !", ephemeral=True)
+                return await interac_wrapper.respond("On est déjà en lecture !", ephemeral=True)
         else:
             print(f"[MUSIC.RESUME.ERROR] resume() called but not in the registered guilds (GID:{queue.guild_id})")
-            return await ctx.respond("Selon les informations que je possède, il n'y a aucune lecture en cours sur ce serveur", ephemeral=True)
+            return await interac_wrapper.respond("Selon les informations que je possède, il n'y a aucune lecture en cours sur ce serveur", ephemeral=True)
 
-    #TODO UNTESTED
-    async def stop(self, ctx: discord.Interaction):
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
+    
+    async def stop(self, interac_wrapper: InteractionWrapper):
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
         
-        if queue.has_voice_client():
+        if queue.has_voice_client:
             if queue.is_playing or queue.is_paused:
-                if ctx.author.voice is None or ctx.author.voice.channel != queue.get_voice_channel():
-                    return await ctx.respond("Je suis en train de jouer de la musique là, viens me le dire en face !", ephemeral=True)
-                queue.next_entry_condition = NextEntryCondition.STOP
-                queue.repeat_bypass = True
+                if interac_wrapper.author.voice is None or interac_wrapper.author.voice.channel != queue.voice_channel:
+                    return await interac_wrapper.respond("Je suis en train de jouer de la musique là, viens me le dire en face !", ephemeral=True)
+                queue.next_entry_condition = AfterEntryPlaybackAction.STOP
+                queue.dont_update_cursor_position = True
                 queue.stop()
                 print(f"[MUSIC.STOP] stopped listening (GID:{queue.guild_id})")
-                return await ctx.respond("Ok j'arrête de lire la musique :(")
+                return await interac_wrapper.respond("Ok j'arrête de lire la musique :(")
         else:
             print(f"[MUSIC.STOP.ERROR] stop() called but not in the registered guilds (GID:{queue.guild_id})")
-            return await ctx.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
+            return await interac_wrapper.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
 
 #endregion
 
@@ -476,106 +218,36 @@ class Music():
 
 
 #region entry info
-    #TODO UNTESTED
-    async def info(self, ctx: discord.Interaction, index: int):
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
+    async def info(self, interac_wrapper: InteractionWrapper, index: int):
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
 
         if queue is None:
-            return await ctx.respond("Aucune liste de lecture", ephemeral=True)
+            return await interac_wrapper.respond("Aucune liste de lecture", ephemeral=True)
         
         if index >= queue.size and index < 0:
-            return await ctx.respond('L\'index %d n\'existe pas' % (index), ephemeral=True)
+            return await interac_wrapper.respond('L\'index %d n\'existe pas' % (index), ephemeral=True)
         
-        entry = queue.content[index]
+        entry = queue.entries[index]
 
-#region old code
-        # content = ""
-
-        # if hasattr(entry, 'like_count') and hasattr(entry, 'view_count'):
-        #     content += f"{(entry.view_count)} vues | {entry.like_count} likes\n"
-
-        # if hasattr(entry, 'channel') and hasattr(entry, 'channel_url'):
-        #     content += f"Chaîne : [{entry.channel}]({entry.channel_url})"
-        #     if hasattr(entry, 'channel_follower_count'):
-        #         content += f" ({entry.channel_follower_count} abonnés)"
-        #     content += "\n\n"
-
-        # if Queues[guild].cursor == index:
-        #     pause: str = "[Paused]" if Queues[guild].voice_client.is_paused() else ""
-        #     current: float = Queues[guild].pausetime - Queues[guild].starttime if Queues[guild].voice_client.is_paused() else time.time() - Queues[guild].starttime
-            
-        #     if not hasattr(entry, 'duration'): #Other Stream
-        #         content += f"Durée d'écoute : {time_format(current)} {pause}\n\n"
-        #     else: #File
-        #         content += f"Progression : {time_format(current)}/{time_format(entry.duration)} {pause}\n"
-                
-        #         #Progress bar
-        #         progress = (current/entry.duration)*20
-        #         content += "["
-        #         for i in range(0,20):
-        #             if int(progress) == i:
-        #                 content += "●"
-        #             else:
-        #                 content += "─"
-        #         content += f"] ({int((current/entry.duration)*100)}%)\n\n"
-
-        # if hasattr(entry, 'album'):
-        #     content += f"Album : {entry.album}\n\n"
-        # if hasattr(entry, 'playlist'):
-        #     if entry.playlist is not None :
-        #         content += f"Playlist : [{entry.playlist.title}]({entry.playlist.url})\n\n"
-        # content += f"Position dans la queue : {index}"
-
-
-
-        # embed = discord.Embed(
-        #     title = entry.title,
-        #     url = entry.url,
-        #     description = content,
-        #     color = 0x565493
-        # )
-
-        # # embed_dict = {
-        # #     "title" : entry.title,
-        # #     "url" : entry.url,
-        # #     "video" : {"url" : entry.url, "height" : 200, "width" : 200},
-        # #     "description" : content,
-        # #     "color" : 0x565493
-        # # }
-
-        # # embed = discord.Embed.from_dict(embed_dict)
-
-        
-
-        # # if entry.is_youtube:
-        # #     if hasattr(entry, 'url'):
-        # #         embed.video = 
-        # if hasattr(entry, 'thumbnail'):
-        #     embed.set_image(url = entry.thumbnail)
-        # #embed.set_thumbnail(url=self.bot.user.avatar.url)
-        # embed.set_footer(text = "Demandé par %s" % entry.applicant.display_name, icon_url = entry.applicant.display_avatar.url)
-#endregion
-
-        #TODO modify into a Queue method
-        embed: discord.Embed = EmbedBuilder.build_embed(entry, queue)
+        embed: discord.Embed = EmbedBuilder.build_entry_info_embed(entry, queue)
         if queue.cursor == index:
-            play_status = " ❚❚" if queue.is_paused() else " ▶"
-            name = play_status + "\t" + (" En pause" if queue.is_paused() else " En cours de lecture")
+            play_status = " ❚❚" if queue.is_paused else " ▶"
+            name = play_status + "\t" + (" En pause" if queue.is_paused else " En cours de lecture")
         else:
             name = "Informations piste"
         embed.set_author(name = name, icon_url = self.bot.user.display_avatar.url)
-        return await ctx.respond(embed=embed)
+        return await interac_wrapper.send_embed(embed=embed)
 
 
-    #TODO UNTESTED
-    async def now_playing(self, ctx: discord.Interaction):
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
-        if queue is None or queue.cursor == queue.size:
-            return await ctx.respond(
+
+    async def now_playing(self, interac_wrapper: InteractionWrapper):
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
+        if queue is None or queue.ended or queue.stopped:
+            return await interac_wrapper.respond(
                 'Rien en lecture',
                 ephemeral=True)
         else:
-            await self.info(ctx, queue.cursor)
+            await self.info(interac_wrapper, queue.cursor)
 
 #endregion
 
@@ -584,16 +256,15 @@ class Music():
 
 
 #region queue cmds
-    async def print_queue(self, ctx: discord.Interaction, page:int = None):
+    async def print_queue(self, interac_wrapper: InteractionWrapper, page:int = None):
 
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
         if queue is None:
-            return await ctx.respond('Aucune liste de lecture sur ce serveur', ephemeral=True)
+            return await interac_wrapper.respond('Aucune liste de lecture sur ce serveur', ephemeral=True)
 
 
         total_duration = 0
         total_size = 0
-        current_playlist = ""
         queue_list = ""
         
 
@@ -606,7 +277,7 @@ class Music():
             print_max = min(print_min + print_size, queue.size)
         else:
             if (page - 1) * print_size > queue.size or page < 1:
-                return await ctx.respond('Index de page invalide', ephemeral=True)
+                return await interac_wrapper.respond('Index de page invalide', ephemeral=True)
             
             print_min = (page - 1)*print_size
             print_max = min(print_min + print_size, queue.size)
@@ -616,8 +287,10 @@ class Music():
         else:
             queue_list += "⠀⠀⠀⠀…\n"
             
+
+        current_playlist: EntryPlaylist = None
         for index in range(print_min, print_max):
-            entry: Entry = queue.content[index]
+            entry: Entry = queue.entries[index]
             #Line variables
             tab = ""
 
@@ -638,20 +311,16 @@ class Music():
             file_size_str = ""
             if hasattr(entry, 'size'): file_size_str = entry.size/1000000
 
-            
-            
-            current_playlist = ""
 
-            #TODO ???
             if entry.playlist is not None:
                 tab = "⠀⠀⠀⠀"
-                if entry.playlist.id != current_playlist:
-                    current_playlist = entry.playlist.id
+                if current_playlist is None or current_playlist.id != entry.playlist.id:
+                    current_playlist = entry.playlist
                     if queue.repeat_mode == RepeatMode.PLAYLIST:
                         queue_list += "⟳ ⠀"
                     else:
                         queue_list += "⠀⠀ "
-                    queue_list += f" Playlist : {entry.playlist.title}\n"
+                    queue_list += f" Playlist : {current_playlist.title}\n"
                 
             
             
@@ -668,9 +337,9 @@ class Music():
             queue_list += "⠀⠀⠀⠀…"
         
         repeat_text = {
-            RepeatMode.NO_REPEAT: "Aucun",
+            RepeatMode.NONE: "Aucun",
             RepeatMode.ENTRY: "Musique en cours",
-            RepeatMode.ALL: "Liste de lecture",
+            RepeatMode.QUEUE: "Liste de lecture",
             RepeatMode.PLAYLIST: "Playlist"
         }
 
@@ -690,46 +359,46 @@ class Music():
 
         embed.set_footer(text = footerText)
 
-        return await ctx.respond(embed=embed)
+        return await interac_wrapper.send_embed(embed=embed)
     
 
     
-    async def move(self, ctx: discord.Interaction, frm: int, to: int):
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
+    async def move(self, interac_wrapper: InteractionWrapper, frm: int, to: int):
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
         if queue is None:
-            return await ctx.respond("Aucune liste de lecture", ephemeral=True)
+            return await interac_wrapper.respond("Aucune liste de lecture", ephemeral=True)
 
         if frm == to:
-            return await ctx.respond('La destination ne peut pas être égale à la source', ephemeral=True)
+            return await interac_wrapper.respond('La destination ne peut pas être égale à la source', ephemeral=True)
 
         if frm < queue.size and frm >= 0 and to < queue.size and to >= 0:
             moved_entry_title = queue.get_entry(frm).title
             queue.move_entry(frm, to)
 
             #global announce
-            await ctx.respond(f"La piste n°{frm} a été déplacé à la position {to}")
+            await interac_wrapper.respond(f"La piste n°{frm} a été déplacé à la position {to}")
             #user response
-            await ctx.respond(f"{moved_entry_title} a été déplacé de {frm} vers {to}", ephemeral=True)
+            await interac_wrapper.respond(f"{moved_entry_title} a été déplacé de {frm} vers {to}", ephemeral=True)
             return
         else:
-            return await ctx.respond("Une des deux positions est invalide", ephemeral=True)
+            return await interac_wrapper.respond("Une des deux positions est invalide", ephemeral=True)
 
-
-    async def remove(self, ctx: discord.Interaction, idx1: int, idx2: int = None):
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
+    #TODO Range Stops even if before or after cursor
+    async def remove(self, interac_wrapper: InteractionWrapper, idx1: int, idx2: int = None):
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
         
         if queue is None:
-            return await ctx.respond("Aucune liste de lecture", ephemeral=True)
+            return await interac_wrapper.respond("Aucune liste de lecture", ephemeral=True)
                     
         if idx1 >= queue.size or idx1 < 0:
-            return await ctx.respond(f"L'index 1 ({idx1}) n'existe pas dans la queue", ephemeral=True)
+            return await interac_wrapper.respond(f"L'index 1 ({idx1}) n'existe pas dans la queue", ephemeral=True)
         
         if idx2 is None: # remove one entry
             entry = queue.get_entry(idx1)
             # stop playback if current entry is being removed
+            queue.remove_entry(idx1)
             if idx1 == queue.cursor:
                 queue.stop()
-            queue.remove_entry(idx1)
             # move cursor if removed item was before
             if idx1 <= queue.cursor:
                 queue.cursor -= 1
@@ -737,18 +406,20 @@ class Music():
             if entry.filename in os.listdir(config.downloadDirectory):
                 os.remove(config.downloadDirectory + entry.filename)
             print(f"[MUSIC.REMOVE] Entry number {idx1} has been removed (GID:{queue.guild_id})")
-            return await ctx.respond(f"{entry.title} a bien été supprimé")
+            return await interac_wrapper.respond(f"{entry.title} a bien été supprimé")
         
         else: # remove multiple entries
             oldSize = queue.size
             # index checks
             if idx2 >= oldSize or idx2 < 0:
-                return await ctx.respond(f"L'index 2 ({idx2}) n'existe pas dans la liste de lecture", ephemeral=True)
+                return await interac_wrapper.respond(f"L'index 2 ({idx2}) n'existe pas dans la liste de lecture", ephemeral=True)
             if idx1 > idx2:
-                return await ctx.respond("Attention à l'ordre des index !", ephemeral=True)
+                return await interac_wrapper.respond("Attention à l'ordre des index !", ephemeral=True)
             
             if idx1 <= queue.cursor <= idx2:
-                queue.pause()
+                queue.dont_update_cursor_position = True
+                queue.next_entry_condition = AfterEntryPlaybackAction.STOP
+                queue.stop()
 
             for i in range(idx2 - idx1 + 1):
                 entry = queue.get_entry(idx1)
@@ -757,28 +428,28 @@ class Music():
                     queue.cursor -= 1
                 if entry.filename in os.listdir(config.downloadDirectory):
                     os.remove(config.downloadDirectory + entry.filename)
+
             
-            queue.stop()
             print(f"[MUSIC.REMOVE] Entries in range ({idx1} - {idx2}) have been removed (GID:{queue.guild_id})")
-            return await ctx.respond(f"Les entrées commençant à {idx1} jusqu'à {('la fin de la liste' if idx2 == oldSize else str(idx2))} ont bien été supprimés")
+            return await interac_wrapper.respond(f"Les entrées commençant à {idx1} jusqu'à {('la fin de la liste' if idx2 == oldSize else str(idx2))} ont bien été supprimés")
         
 
 
     
-    async def skip(self, ctx: discord.Interaction):
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
+    async def skip(self, interac_wrapper: InteractionWrapper):
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
 
         if queue is not None:
             if queue.cursor < queue.size:
-                queue.next_entry_condition = NextEntryCondition.SKIP
-                queue.repeat_bypass = True
+                queue.next_entry_condition = AfterEntryPlaybackAction.SKIP
+                queue.dont_update_cursor_position = True
                 queue.cursor = queue.cursor + 1
                 queue.stop()
-                return await ctx.respond("Passage à la musique suivante")
+                return await interac_wrapper.respond("Passage à la musique suivante")
             else:
-                return await ctx.respond('Nous sommes à la fin de la liste de lecture', ephemeral=True)
+                return await interac_wrapper.respond('Nous sommes à la fin de la liste de lecture', ephemeral=True)
         else:
-            return await ctx.respond('Aucune liste de lecture sur ce serveur', ephemeral=True)
+            return await interac_wrapper.respond('Aucune liste de lecture sur ce serveur', ephemeral=True)
 
 #endregion
 
@@ -786,31 +457,31 @@ class Music():
 
 
 
-    async def leave(self, ctx: discord.Interaction):
-        guild_id = ctx.guild.id
+    async def leave(self, interac_wrapper: InteractionWrapper):
+        guild_id = interac_wrapper.guild.id
 
         guild_queue: Queue = QueueManager.get_queue(guild_id)
 
-        if guild_queue is None or not guild_queue.has_voice_client():
+        if guild_queue is None or not guild_queue.has_voice_client:
             voice_client: discord.VoiceClient = self.__get_voice_client_from_guild(guild_id)
             if voice_client is not None:
                 await voice_client.disconnect()
                 voice_client.cleanup()
                 print(f"[MUSIC.LEAVE] Disconnected lone voice_client (GID:{guild_id})")
-                return await ctx.respond('Ok bye!')
+                return await interac_wrapper.respond('Ok bye!')
             else:
                 print(f"[MUSIC.LEAVE.ERROR] leave() called but not in the registered guilds (GID:{guild_id})")
-                return await ctx.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
+                return await interac_wrapper.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
         
 
-        if guild_queue.is_playing() and (ctx.author.voice is None or ctx.author.voice.channel != guild_queue.get_voice_channel()):
-            return await ctx.respond("Je suis en train de jouer de la musique là, viens me le dire en face !", ephemeral=True)
-        guild_queue.next_entry_condition = NextEntryCondition.STOP
+        if guild_queue.is_playing and (interac_wrapper.author.voice is None or interac_wrapper.author.voice.channel != guild_queue.voice_channel):
+            return await interac_wrapper.respond("Je suis en train de jouer de la musique là, viens me le dire en face !", ephemeral=True)
+        guild_queue.next_entry_condition = AfterEntryPlaybackAction.STOP
         guild_queue.stop()
         await guild_queue.disconnect_and_cleanup()
         print(f"[MUSIC.LEAVE] Disconnected voice_client (GID:{guild_id})")
         await asyncio.sleep(0.2)
-        for entry in guild_queue.content:
+        for entry in guild_queue.entries:
             if entry.filename in os.listdir(config.downloadDirectory):
                 try:
                     os.remove(config.downloadDirectory + entry.filename) # If running on Windows), the file currently playing will not be erased
@@ -818,17 +489,17 @@ class Music():
                     print(f"[MUSIC.LEAVE.CLEANUP.ERROR] error while removing file \"{entry.filename}\" (GID:{guild_id})")
                     continue
         await QueueManager.remove_queue(guild_id)
-        return await ctx.respond('Ok bye!')
+        return await interac_wrapper.respond('Ok bye!')
         # else:
         #     print(f"[MUSIC.LEAVE.ERROR] leave() called but voice client is None (GID:{guild_id})")
         #     return await ctx.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
 
-
-    async def repeat(self, ctx: discord.Interaction, mode: str):
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
+    #TODO ERROR command not found
+    async def repeat(self, interac_wrapper: InteractionWrapper, mode: RepeatMode):
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
 
         if queue is None:
-            return await ctx.respond("Aucune liste de lecture", ephemeral=True)
+            return await interac_wrapper.respond("Aucune liste de lecture", ephemeral=True)
 
         repeat_text = {
             RepeatMode.NO_REPEAT: "Pas de répétition",
@@ -848,70 +519,39 @@ class Music():
                 case 'all':
                     queue.repeat_mode = RepeatMode.ALL
                 case _:
-                    return await ctx.respond(f":warning: `{mode}` n'est pas un mode de répétition existant", ephemeral=True)
-            return await ctx.respond(f"Le mode de répétition à été changé sur `{repeat_text[queue.repeat_mode]}`")
+                    return await interac_wrapper.respond(f":warning: `{mode}` n'est pas un mode de répétition existant", ephemeral=True)
+            return await interac_wrapper.respond(f"Le mode de répétition à été changé sur `{repeat_text[queue.repeat_mode]}`")
         else:
             repeat_modes = [RepeatMode.NO_REPEAT, RepeatMode.ENTRY, RepeatMode.PLAYLIST, RepeatMode.ALL]
             old_mode = queue.repeat_mode
             new_mode = repeat_modes[(repeat_modes.index(old_mode) + 1) % len(repeat_modes)]
             queue.repeat_mode = new_mode
-            return await ctx.respond(f"Le mode de répétition à été changé sur `{new_mode}`")
+            return await interac_wrapper.respond(f"Le mode de répétition à été changé sur `{new_mode}`")
 
     
-    async def goto(self, ctx: discord.Interaction, index: int):
-        queue: Queue = QueueManager.get_queue(ctx.guild.id)
+    async def goto(self, interac_wrapper: InteractionWrapper, index: int):
+        queue: Queue = QueueManager.get_queue(interac_wrapper.guild.id)
 
         if queue is None:
-            return await ctx.respond("Aucune liste de lecture", ephemeral=True)
+            return await interac_wrapper.respond("Aucune liste de lecture", ephemeral=True)
         
-        if not queue.has_voice_client():
+        if not queue.has_voice_client:
             print("[MUSIC.GOTO.ERROR] guild(%d) has no VoiceClient")
             #TODO Handle queue tests (maybe in a separate method)
-            return await ctx.respond(":warning: Une erreur est survenue lors de la commande", ephemeral=True)
+            return await interac_wrapper.respond(":warning: Une erreur est survenue lors de la commande", ephemeral=True)
 
         if index < queue.size and index >= 0:
             queue.cursor = index
-            if queue.is_playing() or queue.is_paused():
-                queue.repeat_bypass = True
+            if queue.is_playing or queue.is_paused:
+                queue.dont_update_cursor_position = True
                 queue.stop()
             else:
                 await queue.start_playback()
-            return  await ctx.respond(f"Direction la musique n°{index}")
+            return  await interac_wrapper.respond(f"Direction la musique n°{index}")
         else:
-            return await ctx.respond(f"L'index `{index}` n'est pas valide", ephemeral=True)
+            return await interac_wrapper.respond(f"L'index `{index}` n'est pas valide", ephemeral=True)
 
 
-    async def __vc_connection_test(self, ctx: discord.Interaction) -> discord.VoiceClient:
-        voice_client: discord.VoiceClient = ctx.voice_client
-        if voice_client is None:
-            pass
-
-
-    async def __initialize_queue(self, ctx: discord.Interaction):
-        guild_id = ctx.guild.id
-        new_queue: Queue = QueueManager.create_queue(guild_id, None, ctx.channel)
-        print(f"[QUEUE.INIT] New queue added, attempting connection (GID:{guild_id})")
-        await new_queue.connect(ctx.author.voice.channel)
-
-        print(f"[CONNECT.SUCCESS] new connection to channel {ctx.author.voice.channel.name} (GID:{guild_id})")
-        await asyncio.sleep(0.2)
-
-        #Adding startup sound
-        check, file = pick_sound_file("startup")
-        if check:
-            if file != "":
-                new_entry = Entry("Booting up...", self.bot.user, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-                new_entry.add_image("https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/3ddaa372-c58c-4587-911e-1d625dff64dc/dapv26n-b138c16c-1cfc-45c3-9989-26fcd75d3060.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvM2RkYWEzNzItYzU4Yy00NTg3LTkxMWUtMWQ2MjVkZmY2NGRjXC9kYXB2MjZuLWIxMzhjMTZjLTFjZmMtNDVjMy05OTg5LTI2ZmNkNzVkMzA2MC5qcGcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.PnU42OFMHcio7nJ4a5Jsp8C-d6exHqd3vInU1682x1E")
-                new_entry.add_description("Chaîne : [DJPatrice](https://github.com/Kumkwats/DJscord)")
-                new_entry.map_to_file(file)
-                await new_queue.add_entry(new_entry)
-                print(f"[QUEUE.STARTUP] Startup file added to queue (GID:{guild_id})")
-            else:
-                print(f"[QUEUE.STARTUP] Aucun fichier trouvé (GID:{guild_id})")
-        else:
-            print(f"[QUEUE.STARTUP] Dossier Sounds inexistant (GID:{guild_id})")
-
-        return new_queue
 
     def __create_boot_entry(self) -> Entry | None:
         check, file = pick_sound_file("startup")
@@ -939,6 +579,8 @@ class Music():
 
 
 
+
+
 #region Loop Tasks
 #TODO broken
     #afk loop
@@ -952,7 +594,7 @@ class Music():
                 guilds_to_disconnect.append(guild_id)
                 print(f"Timeout: [INFO] Guild ({guild_queue}) has no voice_client, will be removed")
             else:
-                if guild_queue.is_playing():
+                if guild_queue.is_playing:
                     guild_queue.update_last_voice_activity()
                 else:
                     if time.time() - guild_queue.last_voice_activity_time >= config.afkLeaveTime*60:

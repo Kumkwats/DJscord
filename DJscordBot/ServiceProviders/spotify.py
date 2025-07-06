@@ -5,7 +5,7 @@ from DJscordBot.config import config
 from DJscordBot.ServiceProviders.common import CommonResponseData
 
 
-PLAYLIST_SIZE_LIMIT = 25
+PLAYLIST_SIZE_LIMIT = 100
 PROVIDER = 'spotify'
 
 

@@ -1,15 +1,15 @@
-import os
-import asyncio
+#import os
+#import asyncio
 
 import discord
-from discord.channel import VoiceChannel
-from discord.ext import commands, bridge
+#from discord.channel import VoiceChannel
+#from discord.ext import commands
 
 from DJscordBot.djscordBot import DJscordBot
 from DJscordBot.discord.utils import InteractionWrapper
 
-from DJscordBot.config import config
-from DJscordBot.utils import pick_sound_file
+#from DJscordBot.config import config
+#from DJscordBot.utils import pick_sound_file
 from DJscordBot.Managers.queueManager import QueueManager
 
 class Manage():
@@ -19,18 +19,18 @@ class Manage():
     async def ping(self, ctx: InteractionWrapper): # Show latency from API and Voice channel if connected
         msg = "Pong!"
         msg += "\n`%1.0f ms` avec l'API" % (round(self.bot.latency*1000))
-        voice_client: discord.VoiceClient = ctx.context.guild.voice_client
+        voice_client: discord.VoiceClient = ctx.interaction.guild.voice_client
         if voice_client is not None:
             if(voice_client.average_latency != float('inf')):
                 msg += "\n`%1.0f ms` sur %s" % (round(voice_client.average_latency*1000), voice_client.channel.name)
             else:
                 msg += "\n`ping indisponible...` sur %s" % (voice_client.channel.name)
-        await ctx.respond_once(msg)
+        await ctx.respond(msg)
 
     # @commands.command(description="est-ce que c'est pété ?")
     async def cpt(self, ctx: InteractionWrapper):
-        await ctx.respond_once("Est-ce que c'est pété ? Voici ce qu'il faut savoir:" +
-                                "# oui" + 
+        await ctx.respond("Est-ce que c'est pété ? Voici ce qu'il faut savoir:" +
+                                "\n# oui" + 
                                 "\n\n||(@\\Kkum si problème)||")
         #await ctx.resopnd("Nan ça va tkt")
 

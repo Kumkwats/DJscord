@@ -11,8 +11,11 @@ class EntryType(Enum):
 
 
 class EntryPlaylist():
+    """
+    Class representing a playlist data for an entry.
+    """
     def __init__(self, id, title: str, uploader: str, type, web_url: str):
-        self.id = id
+        self.id: str = id
         self.title: str = title
         self.uploader: str = uploader
         self.type: str = type
@@ -20,6 +23,10 @@ class EntryPlaylist():
 
 
 class Entry():
+    """
+    Class representing an entry in the queue.
+    An entry can be a file or a stream.
+    """
     def __init__(self, title: str, user: discord.User, web_url: str):
         #self.id = id
         self.title: str = title

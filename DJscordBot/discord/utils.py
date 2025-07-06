@@ -14,40 +14,52 @@ class InteractionWrapper():
     Class to abstract the command context (or now called Interaction) and have shorthands for commonly accessed context properties
     """
     def __init__(self, context: Interaction):
-        self.context: Interaction = context
+        self.interaction: Interaction = context
         self.guild_id: int = context.guild.id
         self.guild: discord.Guild = context.guild
         self.author: discord.Member = context.user
         self.__message_id: int = None
         self.__last_message_content: str = ""
 
+    @property
+    def voice_client(self) -> discord.VoiceClient | None:
+        return self.interaction.guild.voice_client
 
-    async def defer(self, ephemeral = False):
+
+    async def think(self, ephemeral = False):
         if self.__message_id is None:
-            callback_response: discord.InteractionCallbackResponse = await self.context.response.defer(ephemeral=ephemeral)
+            callback_response: discord.InteractionCallbackResponse = await self.interaction.response.defer(ephemeral=ephemeral)
             self.__message_id = callback_response.message_id
 
     async def send_message_in_author_channel(self, string: str):
-        await self.context.channel.send(string)
+        await self.interaction.channel.send(string)
 
 
 
-    async def respond_once_only(self, content, ephemeral = False):
-        await self.__respond_with_new_message(content, ephemeral = True)
-
-
-    async def whisper_to_author(self, content: str, write_new_message: bool = False):
-        if self.__message_id is None or write_new_message:
+    async def respond(self, content:str, ephemeral: bool = False):
+        if self.__message_id is None:
             self.__last_message_content = content
-            await self.__respond_with_new_message(content, ephemeral = True)
+            await self.__init_response(content, ephemeral=ephemeral)
         else:
             self.__last_message_content = content
             await self.__edit_message(self.__last_message_content)
 
+    async def send_embed(self, embed: discord.Embed, ephemeral: bool = False):
+        if self.__message_id is None:
+            await self.__init_response(None, embed=embed, ephemeral=ephemeral)
+        else:
+            await self.__edit_message(None, embed=embed)
+
+
+    
+    async def whisper_to_author(self, content: str):
+        await self.respond(content, ephemeral=True)
+
+
     async def append_to_last_whisper(self, content_to_append: str, new_line = True, save_edit = True):
         if self.__message_id is None:
             self.__last_message_content = content_to_append
-            await self.__respond_with_new_message(self.__last_message_content, ephemeral = True)
+            await self.__init_response(self.__last_message_content, ephemeral = True)
         else:
             if new_line:
                 content_to_append = "\n" + content_to_append
@@ -58,12 +70,13 @@ class InteractionWrapper():
                 await self.__edit_message(self.__last_message_content + content_to_append)
 
 
-    async def __respond_with_new_message(self, content: str, ephemeral: bool):
-        callback_response = await self.context.response.send_message(content, ephemeral = ephemeral)
+    async def __init_response(self, content: str, embed: discord.Embed = None, ephemeral: bool = False):
+        callback_response = await self.interaction.response.send_message(content, embed=embed, ephemeral = ephemeral)
         self.__message_id = callback_response.message_id
 
-    async def __edit_message(self, content: str):
-        await self.context.followup.edit_message(self.__message_id, content=content)
+    async def __edit_message(self, content: str, embed: discord.Embed = None):
+        # await self.context.followup.edit_message(self.__message_id, content=content)
+        await self.interaction.edit_original_response(content=content, embed=embed)
 
     
 
@@ -72,20 +85,24 @@ class InteractionWrapper():
 
 
 class EmbedBuilder():
+    """
+    Class to easily create Discord embeds to display in interaction responses.
+    """
+
     progress_bar_size = 25
 
     @classmethod
-    def build_embed(cls, entry:Entry, queue_data: Queue) -> discord.Embed:
-        time_elapsed: float = queue_data.pausetime - queue_data.starttime if queue_data.is_paused() else time.time() - queue_data.starttime
+    def build_entry_info_embed(cls, entry:Entry, queue_data: Queue) -> discord.Embed:
+        time_elapsed: float = queue_data.pausetime - queue_data.starttime if queue_data.is_paused else time.time() - queue_data.starttime
 
         entry_index = queue_data.get_index(entry)
 
         progress_text = ""
         if queue_data.cursor == entry_index:
             if entry.type == EntryType.FILE and entry.duration > 0:
-                progress_text = f"{cls.__create_progress_bar(time_elapsed, entry.duration, queue_data.is_paused())}\n\n"
+                progress_text = f"{cls.__create_progress_bar(time_elapsed, entry.duration, queue_data.is_paused)}\n\n"
             else:
-                progress_text = f"Durée d'écoute : {time_format(time_elapsed)} {'[Lecture suspendue]' if queue_data.is_paused() else ''}\n\n"
+                progress_text = f"Durée d'écoute : {time_format(time_elapsed)} {'[Lecture suspendue]' if queue_data.is_paused else ''}\n\n"
 
         description: str = ""
         if entry.type == EntryType.FILE and entry.duration > 0:
@@ -112,6 +129,7 @@ class EmbedBuilder():
         embed.set_footer(text = "Demandé par %s" % entry.user.display_name, icon_url = entry.user.display_avatar.url)
 
         return embed
+
 
     @classmethod
     def __create_progress_bar(cls, time_elapsed: float, duration: float, paused: bool = False):
