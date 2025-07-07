@@ -212,7 +212,7 @@ if __name__ == "__main__":
 
     #TODO description of timeCode
     @bot.tree.command(description="Va a une partie spécifique de la musique")
-    @bot.tree.describe(time_code="Position où placer le curseur de lecture dans la musique en cours")
+    @app_commands.describe(time_code="Position où placer le curseur de lecture dans la musique en cours")
     async def seek(ctx: Interaction, time_code: str):
         await musicCog.seek(InteractionWrapper(ctx), time_code)
 
