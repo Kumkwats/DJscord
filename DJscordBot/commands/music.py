@@ -83,7 +83,7 @@ class Music():
             queue = QueueManager.create_queue(guild_id, new_voice_client, interac_wrapper.interaction.channel)
             boot_entry = self.__create_boot_entry()
             if boot_entry is not None:
-                queue.add_entry(boot_entry)
+                await queue.add_entry(boot_entry)
 
             # queue = await self.__initialize_queue(ctx)
 
