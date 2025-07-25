@@ -8,7 +8,7 @@ class CommonResponseData():
         self.inferred_type = inferred_type
     
     @staticmethod
-    def get_empty():
+    def create_empty():
         return CommonResponseData('none', '0', {})
     
     def apply_values(self, other_response_data: Self):

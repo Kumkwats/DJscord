@@ -146,7 +146,11 @@ class MusicPlayCommandTransaction():
                     print(f"[YOUTUBE.ERROR] link check failed\n\n{traceback.format_exc()} | (GID:{self.response_wrapper.guild_id})")
                     return await self.response_wrapper.whisper_to_author(":warning: Une erreur est survenue lors de la vérification du lien")
                 
-                print(f"[YOUTUBE.SUCCESS] found link \"{(result.data['webpage_url'])}\" | (GID:{self.response_wrapper.guild_id})")
+                #TODO sometimes it doesn't has a 'webpage_url'
+                try:
+                    print(f"[YOUTUBE.SUCCESS] found link \"{(result.data['webpage_url'])}\" | (GID:{self.response_wrapper.guild_id})")
+                except Exception as ex:
+                    print(f"[YOUTUBE.WEBPAGE_URL.WARNING] webpage_url is not in the result_data:\n{ex}\n\nresult_data_keys: {result.data.keys()}")
                 return await self.__yt_process_response_data(result)
 
 
@@ -296,31 +300,6 @@ class MusicPlayCommandTransaction():
                             await self.response_wrapper.send_message_in_author_channel(f"Téléchargement annulé\n-# Vous pouvez démarrer le téléchargement d'une playlist")
                     return
 
-
-
-
-
-                # (init_success, init_error_message) = await self.__playlist_lock_mutex()
-                # if init_success:
-                #     # actual download
-                #     await self.response_wrapper.append_to_last_whisper(f"- Téléchargement de la playlist (nombre d'entrées : {len(entries)}): \n-# (Le téléchargement est limité à {PLAYLIST_LIMIT_ENTRIES} entrées réussies)", True)
-                    
-                #     (download_success, result_dict) = await self.__yt_download_playlist_final(entries, yt_playlist)
-                    
-                #     if download_success:
-                #         # await self.response_wrapper.whisper_to_author(f"Téléchargement effectué !\n{self.__get_processing_time()}")
-                #         if result_dict['success'] <= 0:
-                #             await self.response_wrapper.whisper_to_author(f"Je n'ai pas réussi à télécharger une seule musique de la playlist :(\n{self.__get_processing_time()}")
-                #         if result_dict['failed'] > 0:
-                #             await self.response_wrapper.whisper_to_author(f"Playlist téléchargée avec quelques échecs...\n{self.__get_processing_time()}")
-                #         await self.response_wrapper.whisper_to_author(f"Playlist téléchargée avec succès !\n{self.__get_processing_time()}")
-                #         self.__unlock_playlist_download()
-                #         return await self.response_wrapper.send_message_in_author_channel("Téléchargement de la playlist complété\n-# Vous pouvez démarrer le téléchargement d'une playlist")
-                #     else:
-                #         return await self.__yt_download_playlist_canceled()
-                
-                # else:
-                #     await self.response_wrapper.whisper_to_author(f"{init_error_message}")
 
 
 
@@ -730,58 +709,8 @@ class MusicPlayCommandTransaction():
                     else:
                         return await self.__yt_download_playlist_canceled()
 
-
-
-
-
-
-
-
-                    # (download_success, resutl_dict) = await self.__spt(spt_pl_entries, yt_playlist)
-                    # if download_success:
-                    #     # await self.response_wrapper.whisper_to_author(f"Téléchargement effectué !\n{self.__get_processing_time()}")
-                    #     if result_dict['success'] <= 0:
-                    #         await self.response_wrapper.whisper_to_author(f"Je n'ai pas réussi à télécharger une seule musique de la playlist :(\n{self.__get_processing_time()}")
-                    #     if result_dict['failed'] > 0:
-                    #         await self.response_wrapper.whisper_to_author(f"Playlist téléchargée avec quelques échecs...\n{self.__get_processing_time()}")
-                    #     await self.response_wrapper.whisper_to_author(f"Playlist téléchargée avec succès !\n{self.__get_processing_time()}")
-                    #     self.__unlock_playlist_download()
-                    #     return await self.response_wrapper.send_message_in_author_channel("Téléchargement de la playlist complété\n-# Vous pouvez démarrer le téléchargement d'une playlist")
-                    # else:
-                    #     return await self.__yt_download_playlist_canceled()
                 else:
                     await self.response_wrapper.whisper_to_author(f"{init_error_message}")
-                
-                
-
-
-                
-
-                # number_of_entries = len(spt_ab_entries)
-                # queue: Queue = self.__get_queue_from_ctx()
-                # number_of_entries: int = len(spt_playlist.tracks)
-                # success: int = 0
-                # failed: int = 0
-
-                # for i in range(number_of_entries):
-                    
-                #     #Check connection
-                #     if not queue.is_connected():
-                #         return False
-
-                #     if success >= PLAYLIST_LIMIT_ENTRIES:
-                #         break
-                    
-
-                #     spt_entry: Entry = spt_ab_entries[i]
-                #     spt_track: spotify.SpotifyTrack = spt_playlist.tracks[i]
-                #     if await self.__spt_playlist_download_track(spt_entry, spt_track, success, failed, number_of_entries):
-                #         success += 1
-                #         continue
-                #     else:
-                #         failed += 1
-                #         continue
-            
                 
 
             #endregion

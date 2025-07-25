@@ -56,10 +56,9 @@ class YoutubeBaseObject():
         self.type = YoutubeAPI.infer_response_object_type(request_data)
         
         self.url = request_data['original_url']
-        self.web_url = request_data['webpage_url']
+        self.web_url = request_data['webpage_url'] if 'webpage_url' in request_data else None
         self._raw_data = request_data
 
-    
 
     def __str__(self):
         return f"YouTube (type: {self.type}) | name: '{self.name}' | id: '{self.id}'"
@@ -92,7 +91,6 @@ class   YoutubeVideo(YoutubeBaseObject):
 class YoutubePlaylist(YoutubeBaseObject):
     def __init__(self, request_data):
         super().__init__(request_data)
-        self.web_url = request_data['webpage_url']
         self.uploader = request_data['uploader']
         self.uploader_id = request_data['uploader_id']
         self.uploader_url = request_data['uploader_url']
@@ -143,7 +141,7 @@ class YoutubeAPI():
 
     @classmethod
     async def __extract_info_async(cls, query: str, extractor, user_update_coroutine = None, frequency_update: float = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> CommonResponseData:
-        response_data: CommonResponseData = CommonResponseData.get_empty()
+        response_data: CommonResponseData = CommonResponseData.create_empty()
 
         start_time: float = time.time()
         last_update_time: float = time.time()
@@ -163,7 +161,7 @@ class YoutubeAPI():
                 if user_update_coroutine is not None:
                     time_elapsed = time.time() - start_time
                     await user_update_coroutine(time_elapsed)
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.25)
 
         return response_data
 
@@ -180,10 +178,15 @@ class YoutubeAPI():
 
     @classmethod
     async def get_data_async(cls, youtube_link: str, user_update_coroutine = None, frequency_update: float = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> CommonResponseData:
+        #extractor
         def data_extract_coro(query, response_data: CommonResponseData):
             raw_data = ydl.extract_info(query, download=False)
-            response_data.apply_values(CommonResponseData(PROVIDER, raw_data['id'], raw_data, cls.infer_type_from_request_url(query)))
+            if raw_data is None or 'id' not in raw_data:
+                response_data = None
+            else:
+                response_data.apply_values(CommonResponseData(PROVIDER, raw_data['id'], raw_data, cls.infer_type_from_request_url(query)))
         
+
         return await cls.__extract_info_async(youtube_link, data_extract_coro, user_update_coroutine, frequency_update, print_in_console)
 
 
