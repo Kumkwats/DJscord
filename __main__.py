@@ -7,40 +7,43 @@ import traceback
 
 import discord
 from discord import app_commands, Intents, Interaction
-import discord.ext.commands
-from DJscordBot.djscordBot import DJscordBot
 
+
+
+from DJscordBot.djscordBot import DJscordBot
 from DJscordBot.config import config
 
+from DJscordBot.logging.utils import get_logger
 from DJscordBot.discord.utils import InteractionWrapper
 
 from DJscordBot.commands.music import Music
 from DJscordBot.commands.manage import Manage
 from DJscordBot.commands.fun import chocolatine
-import discord.ext
-# from DJscordBot.commands.debug import Debug
 
 
 
 if __name__ == "__main__":
 
+    logger = get_logger("djscordbot")
+
     if os.path.isdir(config.downloadDirectory): # Preparing download folder
-        print("[BOT] Cleaning up download folder...")
+        logger.info("Cleaning up download folder...")
         for f in os.listdir(config.downloadDirectory):
-            os.remove(config.downloadDirectory + f)
+            file = config.downloadDirectory + f
+            os.remove(file)
+            logger.debug(f"removed file \'{file}\'")
     else:
         os.makedirs(config.downloadDirectory)
-        print(f"[BOT] Created download folder in : {config.downloadDirectory}")
+        logger.info(f"Created download folder in : {config.downloadDirectory}")
 
 
     intents = Intents.default()
     intents.messages = True
     intents.message_content = True
 
-
     bot: DJscordBot = DJscordBot(description="djscord !", intents=intents)
     
-    print("[BOT] Starting up...")
+    logger.debug("Registering events...")
 
     #TODO make error send a message to the author ??
     @bot.event
@@ -52,17 +55,16 @@ if __name__ == "__main__":
             type=discord.ActivityType.listening,
             name=config.GetPrefix()+"help"))
 
-        print(f"[BOT.READY] Logged in as {bot.user} ({bot.user.id})")
-        print('----------------')
+        logger.info(f"[READY] Logged in as {bot.user} ({bot.user.id})\n----------------")
 
     @bot.event
     async def on_connect():
-        print("[BOT.CONNECTION] Established connection with Discord")
+        logger.info("[CONNECT] Established connection with Discord")
         pass
     
     @bot.event
     async def on_disconnect():
-        print("[BOT.CONNECTION] Disconnected from Discord")
+        logger.info("[CONNECT] Disconnected from Discord")
         pass
 
     # @bot.event
@@ -74,7 +76,7 @@ if __name__ == "__main__":
 
     @bot.event
     async def on_resumed():
-        print("[BOT.SESSION] Session resumed")
+        logger.info("[SESSION] Session resumed")
         pass
 
 
@@ -110,7 +112,7 @@ if __name__ == "__main__":
 
     @play.error
     async def play_error(ctx: Interaction, error: app_commands.AppCommandError):
-        print(traceback.print_exception(error))
+        logger.error(f"An error occured in the play command\ntraceback:\n{traceback.print_exception(error)}")
         error_message = ":warning: Une erreur est survenue pendant le traitement de la requète"
         if ctx.response.is_done:
             await ctx.followup.send(error_message, ephemeral=True)
@@ -220,10 +222,6 @@ if __name__ == "__main__":
     async def leave(ctx: Interaction):
         await musicCog.leave(InteractionWrapper(ctx))
 
-    
-
-
-    
 
 
 
@@ -243,4 +241,5 @@ if __name__ == "__main__":
     # print("[BOT.COG] Added Debug Cog")
     # bot.add_cog(Debug(bot))
     # print("[BOT.RUN] Running the bot")
+
     bot.run(config.token)

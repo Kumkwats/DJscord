@@ -1,6 +1,9 @@
 import os
 import json
 
+from DJscordBot.logging.utils import get_logger
+logger = get_logger("djscordbot.config")
+
 CFGFILE: str = "resources/config.json"
 
 class Config():
@@ -18,13 +21,13 @@ class Config():
             f.close()
             
             if 'discord-token' not in self.conf:
-                print("[CONFIG.ERROR] No discord token provided in config file. The bot can't work without a discord token")
+                logger.critical("No discord token provided in config file. The bot can't work without a discord token")
                 exit()
             elif self.conf["discord-token"].startswith('<') or self.conf["discord-token"].endswith('>'):
-                print("[CONFIG.ERROR] Please provide a valid token. The bot can't work without a valid token")
+                logger.critical("Please provide a valid token. The bot can't work without a valid token")
                 exit()
 
-            print("[FILE_DIRECTORIES] Will write and read files at those directories (relative to working dir):")
+            write_info = "[FILES] Will write and read files at those directories (relative to working dir):"
             
             self.downloadDirectory = "resources/downloads/" # default downloads directory
             # if 'download-directory' in self.conf:
@@ -34,7 +37,7 @@ class Config():
             #     if self.downloadDirectory[-1] != "/":
             #         self.downloadDirectory += "/"
 
-            print("\tDownloaded files at: " + self.downloadDirectory)
+            write_info += "\tDownloaded files at: " + self.downloadDirectory
 
 
             self.soundDirectory = "resources/sounds/" # default sounds directory
@@ -45,8 +48,8 @@ class Config():
             #     if self.soundDirectory[-1] != "/":
             #         self.soundDirectory += "/"
             
-            print("\tOther sound files at: " + self.soundDirectory)
-
+            write_info += "\tOther sound files at: " + self.soundDirectory
+            logger.info(write_info)
 
             self.afkLeaveActive = True
             self.afkLeaveTime = 15 # default timeout afk leave
@@ -55,34 +58,36 @@ class Config():
                 self.afkLeaveTime = self.conf['minutes-before-disconnecting']
 
             if self.afkLeaveActive:
-                print("[CONFIG.AFK] Will disconnect when inactive for more than %d minutes" % (self.afkLeaveTime))
+                logger.info(f"[AFK] Will disconnect when inactive for more than {self.afkLeaveTime} minutes")
             else:
-                print("[CONFIG.AFK] Will not disconnect when inactive")
+                logger.info("[AFK] Will not disconnect when inactive")
 
             self.spotifyEnabled = False
             if 'spotify-client-id' and 'spotify-client-secret' in self.conf:
                 self.spotifyEnabled = True
-            print("[CONFIG.SPOTIFY] research is %s" % ("enabled" if self.spotifyEnabled else "disabled"))
+
+            if self.spotifyEnabled:
+                logger.info(f"[SPOTIFY] research is ENABLED")
+            else:
+                logger.info(f"[SPOTIFY] research is DISABLED")
 
             self.debug: bool = False
             if 'debug' in self.conf:
                 self.debug = self.conf['debug']
 
-            print('----------------')
             if self.debug is True:
-                print("[CONFIG.DEBUG] Debug flag activated !")
-                print('----------------')
+                logger.warning("[DEBUG] Debug flag activated ! This may create quite some additional files at run time")
             
             self.token = self.conf['discord-token']
         else:
-            print(f"[CONFIG.NO_FILE] No config file found")
+            logger.critical("[NO_FILE] No config file found")
             self.conf = {
                 "discord-token" : self._defaults["discord-token"]
             }
             f = open(CFGFILE, 'w')
             json.dump(self.conf, f)
             f.close()
-            print(f"[CONFIG.NO_FILE] Created template at {CFGFILE}")
+            logger.critical(f"[NO_FILE] Created template at {CFGFILE}\nNow please fill the necessary fields for the bot to work")
             exit()
 
     @classmethod
