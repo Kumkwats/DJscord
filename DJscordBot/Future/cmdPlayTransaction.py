@@ -8,7 +8,6 @@ import requests
 from threading import Lock
 from typing_extensions import Self
 
-
 import discord
 
 from DJscordBot.djscordBot import DJscordBot
@@ -20,8 +19,8 @@ from DJscordBot.Types.enums import PlayQueryType
 from DJscordBot.Types.entry import Entry, EntryPlaylist
 from DJscordBot.discord.utils import InteractionWrapper
 
-
-
+import DJscordBot.logging.utils
+logger = DJscordBot.logging.utils.get_logger("djscordbot.play_cmd_processing")
 
 
 BYPASS_SONG_LINK = False
@@ -59,9 +58,10 @@ class MusicPlayCommandTransaction():
 
     @classmethod
     def __try_locking(cls, transaction: Self) -> bool:
+        logger.debug("Attempting to lock the transaction for playlist processing...")
         if cls.playlist_in_process == True:
             if cls.transaction_locking.finished: # prevent errors that didn't unlocked the playlist download
-                print("WARN - [PLAYLIST.LOCK] completed transaction hasn't unlocked the playlist lock")
+                logger.warning("[PLAYLIST.LOCK] Attempting to lock while an other transaction that has finished keeps it locked, forcing unlock...")
                 cls.__unlock_playlist_download()
             else:
                 return False
@@ -75,6 +75,7 @@ class MusicPlayCommandTransaction():
         
     @classmethod
     def __unlock_playlist_download(cls):
+        logger.debug("Unlocking playlist processing")
         with cls.playlist_lock:
             cls.playlist_in_process = False
             cls.transaction_locking = None
@@ -116,47 +117,44 @@ class MusicPlayCommandTransaction():
         match query_type:
             case PlayQueryType.LINK_SPOTIFY:
                 if not config.spotifyEnabled:
-                    print(f"[SPOTIFY.DISABLED] Spotify research is disabled (GID:{self.response_wrapper.guild.id})")
+                    logger.debug(f"[SPOTIFY.DISABLED] Spotify research is disabled (GID:{self.response_wrapper.guild.id})")
                     self.finished = True
                     return await self.response_wrapper.whisper_to_author(":warning: La recherche Spotify n'est pas activée")
                 return await self.__spt_process_link(query)
-                
-
-
+            
+            
             case PlayQueryType.LINK_YOUTUBE:
-                print(f"[QUERY.PROCESS.YOUTUBE.LINK] begin process of youtube link \"{query}\" (GID:{self.response_wrapper.guild_id})")
+                logger.info(f"[QUERY.PROCESS.YOUTUBE.LINK] Begin process of youtube link \"{query}\" (GID:{self.response_wrapper.guild_id})")
 
                 link_type: str = youtube.YoutubeAPI.infer_type_from_request_url(query)
                 # Personalize message
                 match link_type:
                     case 'channel':
                         return await self.response_wrapper.whisper_to_author(f":warning: Le lien trouvé correspond à une chaine, ce qui n'est pas pris en charge")
-                    
+                
                     case 'playlist':
                         if self.playlist_lock.locked() or self.playlist_in_process:
                             return await self.response_wrapper.whisper_to_author(f":warning: Une Playlist est en cours de téléchargement, veuillez réessayer après la fin de celle en cours")
                         await self.response_wrapper.whisper_to_author(f"- Investigation sur la playlist : `{query}`\n-# (L'opération peut prendre du temps... (40+ secondes))")
-                    
+                
                     case _:
                         await self.response_wrapper.whisper_to_author(f"- Investigation sur la vidéo : `{query}`")
 
                 result: youtube.CommonResponseData = await youtube.YoutubeAPI.get_data_async(query, self.__retrieve_data_feedback)
 
                 if result is None:
-                    print(f"[YOUTUBE.ERROR] link check failed\n\n{traceback.format_exc()} | (GID:{self.response_wrapper.guild_id})")
+                    logger.error(f"[YOUTUBE.ERROR] link check failed\n\n{traceback.format_exc()} | (GID:{self.response_wrapper.guild_id})")
                     return await self.response_wrapper.whisper_to_author(":warning: Une erreur est survenue lors de la vérification du lien")
                 
                 #TODO sometimes it doesn't has a 'webpage_url'
                 try:
-                    print(f"[YOUTUBE.SUCCESS] found link \"{(result.data['webpage_url'])}\" | (GID:{self.response_wrapper.guild_id})")
+                    logger.info(f"[YOUTUBE.SUCCESS] found link \"{(result.data['webpage_url'])}\" | (GID:{self.response_wrapper.guild_id})")
                 except Exception as ex:
-                    print(f"[YOUTUBE.WEBPAGE_URL.WARNING] webpage_url is not in the result_data:\n{ex}\n\nresult_data_keys: {result.data.keys()}")
+                    logger.warning(f"[YOUTUBE.WEBPAGE_URL.WARNING] webpage_url is not in the result_data:\n{ex}\n\nresult_data_keys: {result.data.keys()}")
                 return await self.__yt_process_response_data(result)
 
-
-
             case PlayQueryType.SEARCH_QUERY:
-                print(f"[QUERY.PROCESS.SEARCH] begin youtube search with query: \"{query}\" (GID:{self.response_wrapper.guild_id})")
+                logger.info(f"[QUERY.PROCESS.SEARCH] begin youtube search with query: \"{query}\" (GID:{self.response_wrapper.guild_id})")
         
                 await self.response_wrapper.append_to_last_whisper(f"- Recherche de `{query}`", True)
                 
@@ -180,14 +178,13 @@ class MusicPlayCommandTransaction():
                 (download_success, download_result_message) = await self.__yt_download_video_final(entry, yt_video)
                 
                 if download_success:
-                    print(f"[PLAY.TRANSACTION.SUCCESS] '{yt_video.id}' has been added to queue")
+                    logger.info(f"[PLAY.TRANSACTION.SUCCESS] '{yt_video.id}' has been added to queue")
                     return await self.response_wrapper.whisper_to_author(f"{download_result_message}\n{self.__get_processing_time()}")
                 else:
+                    logger.info(f"[PLAY.TRANSACTION.FAILED] Failed download")
                     return await self.response_wrapper.whisper_to_author(f"{download_result_message}")
             
-
-
-            case PlayQueryType.OTHER_STREAM:
+            case _:
                 return await self.response_wrapper.whisper_to_author(":warning: Cette fonctionnalité n'est pas encore ré-implémentée")
 
 
@@ -242,7 +239,7 @@ class MusicPlayCommandTransaction():
             case 'video':
                 yt_video: youtube.YoutubeVideo = youtube.YoutubeAPI.convert_to_youtube_video(response_data)
                 if yt_video is None:
-                    print(f"[YOUTUBE.VIDEO.CONVERSION_ERROR] Converstion has returned None")
+                    logger.error(f"[YOUTUBE.VIDEO.CONVERSION_ERROR] Converstion has returned None")
                     return await self.response_wrapper.whisper_to_author(f":warning: Une erreur interne est survenue lors de l'analyse de la vidéo youtube")
                 
                 await self.response_wrapper.append_to_last_whisper(f"- Informations reçues sur la video **{yt_video.name}**\n- Téléchargement...", True)
@@ -251,17 +248,16 @@ class MusicPlayCommandTransaction():
                 (download_success, download_result_message) = await self.__yt_download_video_final(entry, yt_video)
                 
                 if download_success:
-                    print(f"[PLAY.TRANSACTION.SUCCESS] '{yt_video.id}' has been added to queue")
+                    logger.info(f"[PLAY.TRANSACTION.SUCCESS] '{yt_video.id}' has been added to queue")
                     return await self.response_wrapper.whisper_to_author(f"{download_result_message}\n{self.__get_processing_time()}")
                 else:
                     return await self.response_wrapper.whisper_to_author(f"{download_result_message}")
-
 
             case 'playlist':
                 yt_playlist: youtube.YoutubePlaylist = youtube.YoutubeAPI.convert_to_youtube_playlist(response_data)
 
                 if yt_playlist is None:
-                    print(f"[YOUTUBE.PLAYLIST.CONVERSION_ERROR] Converstion has returned None ({response_data})")
+                    logger.error(f"[YOUTUBE.PLAYLIST.CONVERSION_ERROR] Converstion has returned None ({response_data})")
                     return await self.response_wrapper.whisper_to_author(f":warning: Une erreur interne est survenue lors de l'analyse de la playlist youtube")
                 
                 entries: list[Entry] = self.__yt_prepare_playlist_entries(yt_playlist)
@@ -302,7 +298,6 @@ class MusicPlayCommandTransaction():
 
 
 
-
             case _:
                 return await self.response_wrapper.whisper_to_author(f"Kaboom :boom:")
 
@@ -316,18 +311,18 @@ class MusicPlayCommandTransaction():
             if await self.__yt_download_single_video(yt_video):
                 queue: Queue = self.__get_queue_from_ctx()
                 if queue is None:
-                    print("[YOUTUBE.DOWNLOAD.REMOVED_QUEUE] Downloaded video but the queue has been removed while downloading")
-                    return (False, f":warning: Téléchargement de {entry.title} mais entre temps la liste de lecture a été supprimée")
+                    logger.warning("[YOUTUBE.DOWNLOAD.REMOVED_QUEUE] Downloaded video but the queue has been removed while downloading")
+                    return (False, f":warning: Téléchargement de {entry.title} effectué mais entre temps la liste de lecture a été supprimée")
                 
                 filename = yt_video.get_filename()
                 try:
                     file_size = os.path.getsize(config.downloadDirectory + filename)
                 except:
-                    print("[YOUTUBE.DOWNLOAD.FILE_SIZE.ERROR] trying to find a file that doesn't exist")
+                    logger.error("[YOUTUBE.DOWNLOAD.FILE_SIZE.ERROR] trying to find a file that doesn't exist")
                     return (False, f":warning: Erreur lors du téléchargement de {entry.title}")
                 entry.map_to_file(filename, yt_video.duration, file_size)
                 position = await queue.add_entry(entry)
-                print(f"[YOUTUBE.PROCESS.SUCCESS] title:{entry.title} | youtube.id:{yt_video.id} has been added to queue")
+                logger.info(f"[YOUTUBE.PROCESS.SUCCESS] title:{entry.title} | youtube.id:{yt_video.id} has been added to queue")
                 return (True, f"[{position}] **{entry.title}** a été ajouté à la file d'attente")
                 #return await self.response_wrapper.whisper_to_author(f"[{position}] **{yt_video.name}** a été ajouté à la file d'attente\n{self.__get_processing_time()}")
             else:
@@ -359,12 +354,12 @@ class MusicPlayCommandTransaction():
             
             #video checks
             if pl_yt_video is None:
-                print(f"[YOUTUBE.PLAYLIST.VIDEO.CONVERSION_ERROR] Converstion has returned None, ignoring")
+                logger.error(f"[YOUTUBE.PLAYLIST.VIDEO.CONVERSION] Converstion has returned None, ignoring")
                 failed += 1
                 continue
             
             if pl_yt_video.is_live:
-                print(f"[YOUTUBE.PLAYLIST.VIDEO.CONVERSION_ERROR] video is live, ignoring")
+                logger.warning(f"[YOUTUBE.PLAYLIST.VIDEO.CONVERSION] video is live, ignoring")
                 failed += 1
                 continue
 
@@ -372,11 +367,11 @@ class MusicPlayCommandTransaction():
 
             (result, result_message) = await self.__yt_download_video_final(entry, pl_yt_video)
             if result:
-                print(f"[PLAY.TRANSACTION.SUCCESS] '{pl_yt_video.id}' has been added to queue")
+                logger.info(f"[PLAY.TRANSACTION.SUCCESS] '{pl_yt_video.id}' has been added to queue")
                 success += 1
                 continue
             else:
-                print(f"[YOUTUBE.PLAYLIST.VIDEO.DOWNLOAD.ERROR] unable to download {pl_yt_video.name} (GID:{self.response_wrapper.guild_id})")
+                logger.error(f"[YOUTUBE.PLAYLIST.VIDEO.DOWNLOAD] unable to download {pl_yt_video.name} (GID:{self.response_wrapper.guild_id})")
                 failed += 1
                 continue
         
@@ -400,17 +395,17 @@ class MusicPlayCommandTransaction():
         # await self.response_wrapper.append_to_last_whisper(f"- Informations reçues sur la video **{yt_video.name}**", True)
 
         if yt_video.is_live:
-            print("[YOUTUBE.VIDEO.DOWNLOAD.ERROR] Attempting to download a live, aborted")
+            logger.warning("[YOUTUBE.VIDEO.DOWNLOAD.ERROR] Attempting to download a live, aborted")
             return False
             #return await self.response_wrapper.whisper_to_author(f"Les vidéos live ne sont pas disponible pour le moment...")
         #Download attempt
         try:
             #await self.response_wrapper.append_to_last_whisper(f"- Téléchargement de la video **{yt_video.name}**...", True)
             await youtube.YoutubeAPI.download(yt_video)
-            print(f"[YOUTUBE.VIDEO.DOWNLOAD] Download success")
+            logger.info(f"[YOUTUBE.VIDEO.DOWNLOAD] Download success")
             return True
         except Exception as ex:
-            print(f"[YOUTUBE.VIDEO.DOWNLOAD.ERROR] unable to download {yt_video.name} | (GID:{self.response_wrapper.guild_id})\n\n{ex}")
+            logger.error(f"[YOUTUBE.VIDEO.DOWNLOAD.ERROR] unable to download {yt_video.name} | (GID:{self.response_wrapper.guild_id})\n\n{ex}")
             return False
     
 
@@ -473,14 +468,13 @@ class MusicPlayCommandTransaction():
         spt_data: spotify.CommonResponseData = spotify.SpotifyAPI.sanitise_link_and_get_data(spotify_link)
         
 
-
         match spt_data.inferred_type:
 
             #region Track
             case 'track':
                 spt_track: spotify.SpotifyTrack = spotify.SpotifyAPI.convert_to_track(spt_data)
                 if spt_track is None:
-                    print(f"[SPOTIFY.TRACK.CONVERSION_ERROR] Converstion has returned None ({spt_data})")
+                    logger.error(f"[SPOTIFY.TRACK.CONVERSION] Converstion has returned None ({spt_data})")
                     return await self.response_wrapper.whisper_to_author("Une erreure interne est survenue lors de l'analyse du titre :(")
                 
                 spt_entry = self.__spt_prepare_track_entry(spt_track)
@@ -494,7 +488,7 @@ class MusicPlayCommandTransaction():
                     if result:
                         spt_yt_video: youtube.YoutubeVideo = youtube.YoutubeAPI.convert_to_youtube_video(responseData)
                         if spt_yt_video is None:
-                            print(f"[SPT_YT.VIDEO.CONVERSION_ERROR] None response from youtube")
+                            logger.error(f"[SPT_YT.VIDEO.CONVERSION] None response from youtube")
                             song_link_failed_message = "Tentative échouée !"
                         else:
                             await self.response_wrapper.append_to_last_whisper(f"Succès !\n- Téléchargement...", True)
@@ -502,10 +496,10 @@ class MusicPlayCommandTransaction():
                             #All good, continue
                             (dl_result, dl_result_message) = await self.__yt_download_video_final(spt_entry, spt_yt_video)
                             if dl_result:
-                                print(f"[PLAY.TRANSACTION.SUCCESS] '{spt_track.name}|{spt_track.id}' has been added to queue")
+                                logger.info(f"[PLAY.TRANSACTION.SUCCESS] '{spt_track.name}|{spt_track.id}' has been added to queue")
                                 return await self.response_wrapper.whisper_to_author(f"{dl_result_message}\n{self.__get_processing_time()}")
                             else:
-                                print(f"[SPT_YT.VIDEO.DOWNLOAD_ERROR] Conversion has returned None")
+                                logger.error(f"[SPT_YT.VIDEO.DOWNLOAD] Conversion has returned None")
                                 song_link_failed_message = f"Erreur lors du téléchargement via le lien !"
                     else:
                         song_link_failed_message = result_message
@@ -534,10 +528,10 @@ class MusicPlayCommandTransaction():
 
                 (result, result_message) = await self.__yt_download_video_final(spt_entry, spt_yt_video)
                 if result:
-                    print(f"[PLAY.TRANSACTION.SUCCESS] '{spt_track.name}|{spt_track.id}' has been added to queue")
+                    logger.info(f"[PLAY.TRANSACTION.SUCCESS] '{spt_track.name}|{spt_track.id}' has been added to queue")
                     return await self.response_wrapper.whisper_to_author(f"{result_message}\n{self.__get_processing_time()}")
                 else:
-                    print(f"[SPT_YT.VIDEO.DOWNLOAD_ERROR] Converstion has returned None")
+                    logger.error(f"[SPT_YT.VIDEO.DOWNLOAD] Converstion has returned None")
                     return await self.response_wrapper.whisper_to_author(f":warning: Erreur lors du téléchargement de la vidéo associée à la musique {spt_track.name}")
 
 
@@ -551,7 +545,7 @@ class MusicPlayCommandTransaction():
             case 'album':
                 spt_album: spotify.SpotifyAlbum = spotify.SpotifyAPI.convert_to_album(spt_data)
                 if spt_album is None:
-                    print(f"[SPOTIFY.TRACK.CONVERSION_ERROR] Converstion has returned None ({spt_data})")
+                    logger.error(f"[SPOTIFY.TRACK.CONVERSION] Converstion has returned None ({spt_data})")
                     return await self.response_wrapper.whisper_to_author("Une erreure interne est survenue lors de l'analyse de l'album :(")
 
                 if self.playlist_lock.locked() or self.playlist_in_process:
@@ -567,7 +561,7 @@ class MusicPlayCommandTransaction():
                     if result:
                         yt_playlist: youtube.YoutubePlaylist = youtube.YoutubeAPI.convert_to_youtube_playlist(responseData)
                         if yt_playlist is None:
-                            print(f"[SPT_YT.VIDEO.CONVERSION_ERROR] None response from youtube")
+                            logger.error(f"[SPT_YT.VIDEO.CONVERSION] None response from youtube")
                             song_link_failed_message = "Tentative échouée !"
                         else:
                             # playlist found
@@ -654,7 +648,7 @@ class MusicPlayCommandTransaction():
             case 'playlist':
                 spt_playlist: spotify.SpotifyPlaylist = spotify.SpotifyAPI.convert_to_playlist(spt_data)
                 if spt_playlist is None:
-                    print(f"[SPOTIFY.TRACK.CONVERSION_ERROR] Converstion has returned None ({spt_data})")
+                    logger.error(f"[SPOTIFY.TRACK.CONVERSION] Converstion has returned None ({spt_data})")
                     return await self.response_wrapper.whisper_to_author("Une erreure interne est survenue lors de l'analyse de l'album :(")
                 
                 spt_pl_entries: list[Entry] = self.__spt_prepare_playlist_entries(spt_playlist)
@@ -719,12 +713,12 @@ class MusicPlayCommandTransaction():
 
             # Will not be implemented in the forseeable future
             case 'artist':
-                print(f"[SPOTIFY.ARTIST_NOT_HANDLED] Spotify artists are not processed by this application\tspotify_link : ({spotify_link})")
+                logger.warning(f"[SPOTIFY.UNHANDLED] Spotify artists are not processed by this application\tspotify_link : ({spotify_link})")
                 return await self.response_wrapper.whisper_to_author(':warning: Je ne prends pas en charge les pages artistes')
             
 
             case _:
-                print(f"[SPOTIFY.UNHANDLED] type \"{spt_data.inferred_type}\" is not handled by this application\tspotify_link : ({spotify_link})")
+                logger.warning(f"[SPOTIFY.UNHANDLED] type \"{spt_data.inferred_type}\" is not handled by this application\tspotify_link : ({spotify_link})")
                 return await self.response_wrapper.whisper_to_author(':warning: Une erreur est survenue, vérifier bien que le lien spotify dirige vers une musique')
 
 
@@ -737,34 +731,41 @@ class MusicPlayCommandTransaction():
         await self.response_wrapper.append_to_last_whisper(f"Recherche de `{spt_track.get_yt_search_query()}`\n[réussi: {success_status}/échec: {failed_status}/total: {number_of_entries}]", new_line=True, save_edit=False)
         spt_search: youtube.YoutubeSearch = await youtube.YoutubeAPI.search_async(spt_track.get_yt_search_query())
         if spt_search is None:
-            print(f"[SPOTIFY.ALBUM.TRACK.SEARCH.ERROR] API returned None")
+            logger.error(f"[SPOTIFY.ALBUM.TRACK.SEARCH] API returned None")
             return False
             
         spt_pl_yt_video: youtube.YoutubeVideo = None
+        logger.debug("[SPOTIFY.YOUTUBE.PLAYLIST.SEARCH] Inspecting youtube search result...")
         for search_entry in spt_search.entries:
-            print(f"type:{search_entry.type}")
+            logger.debug(f"[SPOTIFY.YOUTUBE.PLAYLIST.SEARCH] Search entry type:{search_entry.type}")
             if search_entry.type == 'video':
+                logger.debug(f"[SPOTIFY.YOUTUBE.PLAYLIST.SEARCH] Found matching type 'video', video: {search_entry.type}")
                 spt_pl_yt_video = youtube.YoutubeVideo(search_entry._raw_data)
                 if spt_pl_yt_video is not None:
+                    logger.debug(f"[SPOTIFY.YOUTUBE.PLAYLIST.SEARCH] Conversion succesful, proceeding...")
                     break
+                else:
+                    logger.debug(f"[SPOTIFY.YOUTUBE.PLAYLIST.SEARCH] Conversion unsuccesful, keeping searching if possible...")
+            else:
+                logger.debug(f"[SPOTIFY.YOUTUBE.PLAYLIST.SEARCH] Search entry is not of 'video' type, type: {search_entry.type}")
         
         #video checks
         if spt_pl_yt_video is None:
-            print(f"[YOUTUBE.PLAYLIST.VIDEO.CONVERSION_ERROR] Converstion has returned None, ignoring")
+            logger.error(f"[YOUTUBE.PLAYLIST.VIDEO.CONVERSION] Converstion has returned None, aborting")
             return False
 
         if spt_pl_yt_video.is_live:
-            print(f"[YOUTUBE.PLAYLIST.VIDEO.CONVERSION_ERROR] video is live, ignoring")
+            logger.error(f"[YOUTUBE.PLAYLIST.VIDEO.CONVERSION_ERROR] video is live, aborting")
             return False
 
         await self.response_wrapper.append_to_last_whisper(f"Téléchargement de '{spt_pl_yt_video.name}'\n[réussi: {success_status}/échec: {failed_status}/total: {number_of_entries}]", new_line=True, save_edit=False)
 
         (result, result_message) = await self.__yt_download_video_final(entry, spt_pl_yt_video)
         if result:
-            print(f"[PLAY.TRANSACTION.SUCCESS] '{spt_pl_yt_video.id}' has been added to queue")
+            logger.info(f"[PLAY.TRANSACTION.SUCCESS] '{spt_pl_yt_video.id}' has been added to queue")
             return True
         else:
-            print(f"[YOUTUBE.PLAYLIST.VIDEO.DOWNLOAD.ERROR] unable to download {spt_pl_yt_video.name} (GID:{self.response_wrapper.guild_id})")
+            logger.error(f"[YOUTUBE.PLAYLIST.VIDEO.DOWNLOAD] unable to download {spt_pl_yt_video.name} (GID:{self.response_wrapper.guild_id})")
             return False
 
 
@@ -773,12 +774,12 @@ class MusicPlayCommandTransaction():
     #region song.link
     def __spt_song_link_try_convert(self, spt_item: spotify.SpotifyBaseObject) -> str:
         try:
-            print(f"[SPOTIFY.CONVERT_YT] attempting song.link conversion\nspotify_url : ({spt_item.web_url})")
+            logger.info(f"[SPOTIFY.CONVERT_YT] attempting song.link conversion\nspotify_url : ({spt_item.web_url})")
             songLinkResp: requests.Response = requests.get(f"https://api.song.link/v1-alpha.1/links?url=spotify%3A{spt_item.type}%3A{spt_item.id}&userCountry=FR")
             songLinkData = songLinkResp.json()
             return songLinkData['linksByPlatform']['youtube']['url']
         except Exception as ex:
-            print(f"[SPOTIFY.CONVERT_YT.ERROR] an error occured while converting with song.link..."
+            logger.error(f"[SPOTIFY.CONVERT_YT] An error occured while converting with song.link..."
                 + f"falling back to lazy youtube search\nspotify_url : ({spt_item.web_url})\n"
                 + f"{ex}")
             return None
@@ -788,12 +789,12 @@ class MusicPlayCommandTransaction():
     async def __spt_song_link_try_get_response_data(self, spt_item: spotify.SpotifyBaseObject) -> tuple[bool, str, youtube.CommonResponseData]:
         yt_link = self.__spt_song_link_try_convert(spt_item)
         if yt_link is None:
-            print(f"[SPT_YT.VIDEO.CONVERSION_ERROR] Conversion has failed None")
+            logger.error(f"[SPT_YT.VIDEO.CONVERSION] Conversion has failed, is None")
             return (False, "Tentative échouée !", None)
         
         yt_data: youtube.CommonResponseData = await youtube.YoutubeAPI.get_data_async(yt_link, self.__retrieve_data_feedback)
         if yt_data is None:
-            print(f"[SPT_YT.VIDEO.CONVERSION_ERROR] Converted link has returned None")
+            logger.error(f"[SPT_YT.VIDEO.CONVERSION] Converted link has returned None")
             return (False, "Tentative échouée !", None)
 
         return (True, "Succès !", yt_data)

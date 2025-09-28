@@ -9,8 +9,13 @@ class CommonResponseData():
     
     @staticmethod
     def create_empty():
-        return CommonResponseData('none', '0', {})
+        return CommonResponseData(None, None, {})
     
+    @property
+    def is_empty_or_incomplete(self):
+        return self.provider is None or self.provider_api_id is None or len(self.data) <= 0
+
+
     def apply_values(self, other_response_data: Self):
         self.provider = other_response_data.provider
         self.provider_api_id = other_response_data.provider_api_id

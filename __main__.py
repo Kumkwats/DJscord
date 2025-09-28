@@ -8,7 +8,7 @@ import traceback
 import discord
 from discord import app_commands, Intents, Interaction
 
-
+import DJscordBot.ServiceProviders.yt_dlp_import_patch
 
 from DJscordBot.djscordBot import DJscordBot
 from DJscordBot.config import config
@@ -55,7 +55,7 @@ if __name__ == "__main__":
             type=discord.ActivityType.listening,
             name=config.GetPrefix()+"help"))
 
-        logger.info(f"[READY] Logged in as {bot.user} ({bot.user.id})\n----------------")
+        logger.info(f"[READY] Logged in as {bot.user} ({bot.user.id})\n---------------- BEGIN LISTENING TO COMMANDS")
 
     @bot.event
     async def on_connect():

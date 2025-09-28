@@ -1,6 +1,6 @@
 import time
-
 import asyncio
+
 from threading import Thread
 
 
@@ -15,26 +15,42 @@ PLAYLIST_SIZE_LIMIT: int = 100
 PROVIDER: str = 'youtube'
 DEFAULT_ASYNC_UPDATE_FREQ: float = 2
 
-
+import DJscordBot.logging.utils
+logger = DJscordBot.logging.utils.get_logger("djscordbot.youtube")
 
 # Suppress noise about console usage from errors
 yt_dlp.utils.bug_reports_message = lambda: ''
 
 ydl_opts = {
+    # Video format code. See options.py for more information.
     'format': 'bestaudio[format_note*=original]/bestaudio',
+    # Template for output names.
     'outtmpl': config.downloadDirectory + '%(extractor)s-%(id)s-%(title)s.%(ext)s',
-    'restrictfilenames': True,
+    # Do not allow "&" and spaces in file names
+    'restrictfilenames': True, 
+    # Download single video instead of a playlist if in doubt.
     'noplaylist': True,
+    # Do not verify SSL certificates
     'nocheckcertificate': True,
+    # Do not stop on download errors.
     'ignoreerrors': True,
-    'logtostderr': False,
-    'verbose': False,
-    'quiet': True,
-    'no_warnings': True,
-    'noprogress': True,
+    # Log messages to stderr instead of stdout.
+    'logtostderr': False,       
+    # Print additional info to stdout.
+    'verbose': True,
+    # Do not print messages to stdout.
+    'quiet': False,
+    # Do not print out anything for warnings.
+    'no_warnings': False,
+    # Prepend this string if an input url is not valid. 'auto' for elaborate guessing
     'default_search': 'auto',
+    # Client-side IP address to bind to.
     # bind to ipv4 since ipv6 addresses cause issues sometimes
-    'source_address': '0.0.0.0'
+    'source_address': '0.0.0.0',
+
+    ### Options for the downloader
+
+    'noprogress': True
 }
 
 ydl = yt_dlp.YoutubeDL(ydl_opts)
@@ -58,7 +74,6 @@ class YoutubeBaseObject():
         self.url = request_data['original_url']
         self.web_url = request_data['webpage_url'] if 'webpage_url' in request_data else None
         self._raw_data = request_data
-
 
     def __str__(self):
         return f"YouTube (type: {self.type}) | name: '{self.name}' | id: '{self.id}'"
@@ -98,7 +113,9 @@ class YoutubePlaylist(YoutubeBaseObject):
         for entry in request_data['entries']:
             self.entries.append(YoutubeVideo(entry))
         
-
+    @property
+    def is_empty(self):
+        return len(self.entries) <= 0
 
     def __str__(self):
         return f"Playlist youtube | titre: '{self.name}' | id: '{self.id}' | nombre d'entrées '{len(self.entries)}'"
@@ -108,12 +125,16 @@ class YoutubeSearch(YoutubeBaseObject):
         super().__init__(request_data)
         self.entries: list[YoutubeBaseObject] = []
 
-        data_entres = request_data['entries']
-        print(f"entries length : {len(request_data['entries'])}")
-        for i in range(0, min(PLAYLIST_SIZE_LIMIT, len(data_entres))):
-            self.entries.append(YoutubeBaseObject(data_entres[i]))
+        if 'entries' in request_data:
+            data_entres = request_data['entries']
 
+            for i in range(0, min(PLAYLIST_SIZE_LIMIT, len(data_entres))):
+                if data_entres[i] is not None:
+                    self.entries.append(YoutubeBaseObject(data_entres[i]))
 
+    @property
+    def is_empty(self):
+        return len(self.entries) <= 0
 
     def __str__(self):
         return f"Recherche youtube | requête: '{self.name}' | nombre d'entrées: '{len(self.entries)}'"
@@ -157,7 +178,7 @@ class YoutubeAPI():
             if time_since_last_update > frequency_update:
                 time_since_last_update -= frequency_update
                 if print_in_console:
-                    print(f"[YOUTUBE.DATA.GET] awaiting response...\ttime elapsed:{(time.time() - start_time):4.2f}")
+                    logger.info(f"[YOUTUBE.DATA.GET] awaiting response...\ttime elapsed:{(time.time() - start_time):4.2f}")
                 if user_update_coroutine is not None:
                     time_elapsed = time.time() - start_time
                     await user_update_coroutine(time_elapsed)
@@ -168,11 +189,18 @@ class YoutubeAPI():
 
     @classmethod
     async def search_async(cls, query: str, user_update_coroutine = None, frequency_update: int = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> YoutubeSearch:
-        def search_extract_coro(query, response_data: CommonResponseData):
+        def search_extract_coro(query, returned_response_data: CommonResponseData):
             raw_data = ydl.extract_info(query, download=False)
-            response_data.apply_values(CommonResponseData(PROVIDER, raw_data['id'], raw_data, 'search'))
+            if cls.validate_basic_raw_data(raw_data):
+                returned_response_data.apply_values(CommonResponseData(PROVIDER, raw_data['id'], raw_data, 'search'))
+            else:
+                returned_response_data = None
+
 
         request_data = await cls.__extract_info_async(f"ytsearch:{query}", search_extract_coro, user_update_coroutine, frequency_update, print_in_console)
+        if request_data is None or request_data.is_empty_or_incomplete:
+            return None
+        logger.info(f"Retrieved info from search : {request_data}")
         search_result = YoutubeSearch(request_data.data)
         return search_result
 
@@ -181,22 +209,25 @@ class YoutubeAPI():
         #extractor
         def data_extract_coro(query, response_data: CommonResponseData):
             raw_data = ydl.extract_info(query, download=False)
-            if raw_data is None or 'id' not in raw_data:
-                response_data = None
-            else:
+            if cls.validate_basic_raw_data(raw_data):
                 response_data.apply_values(CommonResponseData(PROVIDER, raw_data['id'], raw_data, cls.infer_type_from_request_url(query)))
-        
+            else:
+                response_data = None
+
 
         return await cls.__extract_info_async(youtube_link, data_extract_coro, user_update_coroutine, frequency_update, print_in_console)
 
 
-    
-
-    
 
 
-    
 
+
+
+    @staticmethod
+    def validate_basic_raw_data(raw_data):
+        if raw_data is None or 'id' not in raw_data:
+            return False
+        return True
 
     @staticmethod
     def infer_type_from_request_url(url) -> str:
@@ -210,7 +241,7 @@ class YoutubeAPI():
 
 
     @classmethod
-    def infer_response_object_type(cls, response_data) -> str | None:
+    def infer_response_object_type(cls, response_data) -> Union[str, None]:
         if '_type' in response_data:
             if 'modified_date' in response_data:
                 return 'playlist'
@@ -224,30 +255,30 @@ class YoutubeAPI():
     @classmethod
     def convert_to_youtube_video(cls, response_data: CommonResponseData) -> YoutubeVideo:
         if not cls.__is_correct_provider(response_data):
-            print(f"[YOUTUBE_API.ERR.convert_to_youtube_video] WRONG_PROVIDER : '{response_data.provider}' instead of '{PROVIDER}'")
+            logger.error(f"[YOUTUBE_API.ERR.convert_to_youtube_video] WRONG_PROVIDER : '{response_data.provider}' instead of '{PROVIDER}'")
             return None
         if cls.infer_response_object_type(response_data.data) != "video":
-            print(f"[YOUTUBE_API.ERR.convert_to_youtube_video] WRONG_TYPE : '{cls.infer_response_object_type(response_data.data)}' instead of 'video'")
+            logger.error(f"[YOUTUBE_API.ERR.convert_to_youtube_video] WRONG_TYPE : '{cls.infer_response_object_type(response_data.data)}' instead of 'video'")
             return None
         return YoutubeVideo(response_data.data)
     
     @classmethod
     def convert_to_youtube_playlist(cls, response_data: CommonResponseData) -> YoutubePlaylist:
         if not cls.__is_correct_provider(response_data):
-            print(f"[YOUTUBE_API.ERR.convert_to_youtube_playlist] WRONG_PROVIDER : '{response_data.provider}' instead of '{PROVIDER}'")
+            logger.error(f"[YOUTUBE_API.ERR.convert_to_youtube_playlist] WRONG_PROVIDER : '{response_data.provider}' instead of '{PROVIDER}'")
             return None
         if cls.infer_response_object_type(response_data.data) != "playlist":
-            print(f"[YOUTUBE_API.ERR.convert_to_youtube_playlist] WRONG_TYPE : '{cls.infer_response_object_type(response_data.data)}' instead of 'video'")
+            logger.error(f"[YOUTUBE_API.ERR.convert_to_youtube_playlist] WRONG_TYPE : '{cls.infer_response_object_type(response_data.data)}' instead of 'video'")
             return None
         return YoutubePlaylist(response_data.data)
     
     @classmethod
     def convert_to_youtube_search(cls, response_data: CommonResponseData) -> YoutubePlaylist:
         if not cls.__is_correct_provider(response_data):
-            print(f"[YOUTUBE_API.ERR.convert_to_youtube_search] WRONG_PROVIDER : '{response_data.provider}' instead of '{PROVIDER}'")
+            logger.error(f"[YOUTUBE_API.ERR.convert_to_youtube_search] WRONG_PROVIDER : '{response_data.provider}' instead of '{PROVIDER}'")
             return None
         if cls.infer_response_object_type(response_data.data) != "search":
-            print(f"[YOUTUBE_API.ERR.convert_to_youtube_search] WRONG_TYPE : '{cls.infer_response_object_type(response_data.data)}' instead of 'search'")
+            logger.error(f"[YOUTUBE_API.ERR.convert_to_youtube_search] WRONG_TYPE : '{cls.infer_response_object_type(response_data.data)}' instead of 'search'")
             return None
         return YoutubeSearch(response_data.data)
 
@@ -285,7 +316,7 @@ class YoutubeAPI():
             if time_since_last_update > frequency_update:
                 time_since_last_update -= frequency_update
                 if print_in_console:
-                    print(f"[YOUTUBE.DOWNLOAD.RUN] Downloading video with id '{video.id}'...")
+                    logger.info(f"[YOUTUBE.DOWNLOAD.RUN] Downloading video with id '{video.id}'...")
                 # if user_update_coroutine is not None:
                 #     time_elapsed = time.time() - start_time
                 #     await user_update_coroutine(time_elapsed)

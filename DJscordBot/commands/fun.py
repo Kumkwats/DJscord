@@ -20,7 +20,7 @@ from DJscordBot.djscordBot import DJscordBot
 #             return await context.send('$ahh')
 
 async def chocolatine(message: discord.Message):
-    words = re.split('\\s+|\'|"|,|!|?', message.content)
+    words = re.split('\\s+|\'|"|,|!|\?', message.content)
     tine_words: list[str] = []
 
     for word in words:
