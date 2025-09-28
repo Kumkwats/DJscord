@@ -4,6 +4,10 @@ import logging
 
 
 
+def is_docker() -> bool:
+    path = '/proc/self/cgroup'
+    return os.path.exists('/.dockerenv') or (os.path.isfile(path) and any('docker' in line for line in open(path)))
+
 def stream_supports_colour(stream: Any) -> bool:
     is_a_tty = hasattr(stream, 'isatty') and stream.isatty()
 
