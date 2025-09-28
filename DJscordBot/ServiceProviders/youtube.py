@@ -241,7 +241,7 @@ class YoutubeAPI():
 
 
     @classmethod
-    def infer_response_object_type(cls, response_data) -> Union[str, None]:
+    def infer_response_object_type(cls, response_data) -> str | None:
         if '_type' in response_data:
             if 'modified_date' in response_data:
                 return 'playlist'
