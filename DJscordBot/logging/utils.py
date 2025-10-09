@@ -103,5 +103,6 @@ def get_logger(log_name = None, log_level: int = default_log_value, is_root: boo
     handler.setFormatter(formatter)
     logger.setLevel(log_level)
     logger.addHandler(handler)
-
+    logger.propagate = False
+    
     return logger
