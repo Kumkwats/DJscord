@@ -1,8 +1,10 @@
+import os
 import time
 import asyncio
+import traceback
 
-from threading import Thread
-
+from multiprocessing import Process, Pipe
+from multiprocessing.connection import Connection
 
 import yt_dlp
 #from youtubesearchpython.__future__ import VideosSearch
@@ -162,39 +164,47 @@ class YoutubeAPI():
 
     @classmethod
     async def __extract_info_async(cls, query: str, extractor, user_update_coroutine = None, frequency_update: float = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> CommonResponseData:
-        response_data: CommonResponseData = CommonResponseData.create_empty()
+        #response_data: CommonResponseData = CommonResponseData.create_empty()
 
         start_time: float = time.time()
         last_update_time: float = time.time()
         time_since_last_update: float = frequency_update 
 
-        extract_thread: Thread = Thread(target=extractor, args=[query, response_data])
+
+        receiver, sender = Pipe(False)
+        extract_thread: Process = Process(target=extractor, args=[query, sender])
         extract_thread.start()
 
         while extract_thread.is_alive():
             delta_time = time.time() - last_update_time
             last_update_time = time.time()
             time_since_last_update += delta_time
-            if time_since_last_update > frequency_update:
-                time_since_last_update -= frequency_update
-                if print_in_console:
-                    logger.info(f"[YOUTUBE.DATA.GET] awaiting response...\ttime elapsed:{(time.time() - start_time):4.2f}")
-                if user_update_coroutine is not None:
-                    time_elapsed = time.time() - start_time
-                    await user_update_coroutine(time_elapsed)
-            await asyncio.sleep(0.25)
-
+            if receiver.poll(0.1):
+                break
+            else:
+                if time_since_last_update > frequency_update:
+                    time_since_last_update -= frequency_update
+                    if print_in_console:
+                        logger.info(f"[YOUTUBE.DATA.GET] awaiting response...\ttime elapsed:{(time.time() - start_time):4.2f}")
+                    if user_update_coroutine is not None:
+                        time_elapsed = time.time() - start_time
+                        await user_update_coroutine(time_elapsed)
+                asyncio.sleep(0.15)
+            
+        response_data: CommonResponseData = receiver.recv()
+        receiver.close()
         return response_data
 
 
     @classmethod
     async def search_async(cls, query: str, user_update_coroutine = None, frequency_update: int = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> YoutubeSearch:
-        def search_extract_coro(query, returned_response_data: CommonResponseData):
+        def search_extract_coro(query: str, pipe_sender: Connection):
             raw_data = ydl.extract_info(query, download=False)
             if cls.validate_basic_raw_data(raw_data):
-                returned_response_data.apply_values(CommonResponseData(PROVIDER, raw_data['id'], raw_data, 'search'))
+                pipe_sender.send(CommonResponseData(PROVIDER, raw_data['id'], raw_data, 'search'))
             else:
-                returned_response_data = None
+                pipe_sender.send(None)
+            pipe_sender.close()
 
 
         request_data = await cls.__extract_info_async(f"ytsearch:{query}", search_extract_coro, user_update_coroutine, frequency_update, print_in_console)
@@ -207,12 +217,13 @@ class YoutubeAPI():
     @classmethod
     async def get_data_async(cls, youtube_link: str, user_update_coroutine = None, frequency_update: float = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> CommonResponseData:
         #extractor
-        def data_extract_coro(query, response_data: CommonResponseData):
+        def data_extract_coro(query: str, pipe_sender: Connection):
             raw_data = ydl.extract_info(query, download=False)
             if cls.validate_basic_raw_data(raw_data):
-                response_data.apply_values(CommonResponseData(PROVIDER, raw_data['id'], raw_data, cls.infer_type_from_request_url(query)))
+                pipe_sender.send(CommonResponseData(PROVIDER, raw_data['id'], raw_data, cls.infer_type_from_request_url(query)))
             else:
-                response_data = None
+                pipe_sender.send(None)
+            pipe_sender.close()
 
 
         return await cls.__extract_info_async(youtube_link, data_extract_coro, user_update_coroutine, frequency_update, print_in_console)
@@ -270,7 +281,23 @@ class YoutubeAPI():
         if cls.infer_response_object_type(response_data.data) != "playlist":
             logger.error(f"[YOUTUBE_API.ERR.convert_to_youtube_playlist] WRONG_TYPE : '{cls.infer_response_object_type(response_data.data)}' instead of 'video'")
             return None
-        return YoutubePlaylist(response_data.data)
+        try:
+            yt_playlist: YoutubePlaylist = YoutubePlaylist(response_data.data)
+            return yt_playlist
+        except Exception as ex:
+            number_of_data_keys: int = len(response_data.data)
+            match number_of_data_keys:
+                case 0:
+                    err: str = "Error while creating youtube playlist object. No keys present in data."
+                case _:
+                    err: str = f"Error while creating youtube playlist object. {len(response_data.data)} key(s) present in data"
+                    err += f"[{response_data.data[0]}"
+                    if number_of_data_keys > 1:
+                        for i in range(1, number_of_data_keys):
+                            err += f", {response_data.data[i]}"
+                    err +="]"
+            logger.exception(f"{err}\n\n{traceback.format_exc()}")
+            return None
     
     @classmethod
     def convert_to_youtube_search(cls, response_data: CommonResponseData) -> YoutubePlaylist:
@@ -285,50 +312,37 @@ class YoutubeAPI():
 
 
     #region Download
-    #old method
-    @classmethod #TODO try update hook
-    async def __downloadAudio(cls, url, message, text: str, loop: asyncio.AbstractEventLoop):
-        #ydl.add_progress_hook(lambda d: cls.downloadProgress(d, message, text, loop))
-        await ydl.download(url)
-
 
     async def download(video: YoutubeVideo):
-        # # if progress_hook is not None:
-        # #     text = f"Téléchargement de **{video.name}**"
-        # #     ydl.add_progress_hook(lambda download_data: progress_hook(download_data, loop, text))
-        # ydl.download(video.web_url)
-
-
-        # Added Thread to prevent locking the bot from responding to other commands
-        frequency_update = 5
+        logger.info(f"[YOUTUBE.DOWNLOAD] Begin download for file {video.get_filename()} !")
         print_in_console = True
+        frequency_update: float = 5 #how much time (in seconds) between prints in console
 
-        last_update_time: float = time.time()
-        time_since_last_update: float = frequency_update 
+        start_time: float = time.time()
+        last_update_time: float = start_time #last time the process has been checked
+        time_since_last_update: float = frequency_update #used to calculate when to print
 
-        download_thread: Thread = Thread(target=ydl.download, args=[video.web_url])
-        download_thread.start()
+        download_process: Process = Process(target=ydl.download, args=[video.web_url])
+        download_process.start()
 
-        while download_thread.is_alive():
+        while download_process.is_alive():
             delta_time = time.time() - last_update_time
-            last_update_time = time.time()
             time_since_last_update += delta_time
+            
+            last_update_time = time.time()
+
             if time_since_last_update > frequency_update:
                 time_since_last_update -= frequency_update
                 if print_in_console:
-                    logger.info(f"[YOUTUBE.DOWNLOAD.RUN] Downloading video with id '{video.id}'...")
-                # if user_update_coroutine is not None:
-                #     time_elapsed = time.time() - start_time
-                #     await user_update_coroutine(time_elapsed)
+                    logger.info(f"[YOUTUBE.DOWNLOAD.RUN] Downloading video with id '{video.id}'... (Elapsed : {(time.time() - start_time):4.2f} seconds)")
             await asyncio.sleep(0.1)
 
-        return
-
-        
-    
-
-    # async def download_bulk(videos: list[YoutubeVideo], loop: asyncio.AbstractEventLoop, progress_hook, max_simultaneous_downloads = 4):
-    #     pass
+        # Check if file has been correctly downloaded
+        if not os.path.isfile(config.downloadDirectory + video.get_filename()):
+            logger.error(f"[YOUTUBE.DOWNLOAD] Download finished but file is not found !")
+            return False
+        logger.info(f"[YOUTUBE.DOWNLOAD] Download finished for file {video.get_filename()} !")
+        return True
 
     #endregion
 
@@ -339,4 +353,4 @@ class YoutubeAPI():
         return response_data.provider == PROVIDER
     
 
-#end region
+#endregion

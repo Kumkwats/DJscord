@@ -484,9 +484,9 @@ class MusicPlayCommandTransaction():
 
                 #retrieving the associated youtube video
                 if not BYPASS_SONG_LINK:
-                    (result, result_message, responseData) = await self.__spt_song_link_try_get_response_data(spt_track)
+                    (result, result_message, response_data) = await self.__spt_song_link_try_get_response_data(spt_track)
                     if result:
-                        spt_yt_video: youtube.YoutubeVideo = youtube.YoutubeAPI.convert_to_youtube_video(responseData)
+                        spt_yt_video: youtube.YoutubeVideo = youtube.YoutubeAPI.convert_to_youtube_video(response_data)
                         if spt_yt_video is None:
                             logger.error(f"[SPT_YT.VIDEO.CONVERSION] None response from youtube")
                             song_link_failed_message = "Tentative échouée !"
@@ -557,9 +557,9 @@ class MusicPlayCommandTransaction():
                 spt_ab_entries: list[Entry] = self.__spt_prepare_album_entries(spt_album)
 
                 if not BYPASS_SONG_LINK:
-                    (result, result_message, responseData) = await self.__spt_song_link_try_get_response_data(spt_album)
+                    (result, result_message, response_data) = await self.__spt_song_link_try_get_response_data(spt_album)
                     if result:
-                        yt_playlist: youtube.YoutubePlaylist = youtube.YoutubeAPI.convert_to_youtube_playlist(responseData)
+                        yt_playlist: youtube.YoutubePlaylist = youtube.YoutubeAPI.convert_to_youtube_playlist(response_data)
                         if yt_playlist is None:
                             logger.error(f"[SPT_YT.VIDEO.CONVERSION] None response from youtube")
                             song_link_failed_message = "Tentative échouée !"
