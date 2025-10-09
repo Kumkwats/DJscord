@@ -206,7 +206,7 @@ class Queue():
         else:
             timestart = 0
 
-        player: discord.FFmpegPCMAudio = discord.FFmpegPCMAudio(
+        player: discord.FFmpegOpusAudio = discord.FFmpegOpusAudio(
             filename,
             before_options = before,
             options = "-vn")
