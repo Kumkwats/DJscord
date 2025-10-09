@@ -1,0 +1,16 @@
+[Unit]
+Description=DJscord Bot Service
+After=network-online.target
+
+[Service]
+Type=simple
+Restart=on-failure
+
+User=djscord
+Group=djscord
+
+WorkingDirectory=/var/lib/djscord
+ExecStart=/usr/bin/python3 -u /opt/djscord
+
+[Install]
+WantedBy=multi-user.target
