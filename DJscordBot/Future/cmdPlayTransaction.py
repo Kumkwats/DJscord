@@ -158,7 +158,7 @@ class MusicPlayCommandTransaction():
         
                 await self.response_wrapper.append_to_last_whisper(f"- Recherche de `{query}`", True)
                 
-                search_results: youtube.YoutubeSearch = await youtube.YoutubeAPI.search_async(query, self.__retrieve_data_feedback)
+                search_results: youtube.YoutubeSearch = await youtube.YoutubeAPI.search_async(query, user_update_coroutine=self.__retrieve_data_feedback)
                 if search_results is None:
                     return await self.response_wrapper.whisper_to_author(":warning: La recherche a echoué")
                 

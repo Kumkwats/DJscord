@@ -1,7 +1,9 @@
 
 """Entry point of the bot
 """
+from logging import warning
 import os
+import platform
 import traceback
 
 
@@ -25,6 +27,16 @@ from DJscordBot.commands.fun import chocolatine
 if __name__ == "__main__":
 
     logger = get_logger("djscordbot")
+    
+    if os.name == "nt":
+        logger.warning("[WINDOWS] You are running python on Windows.") 
+        logger.warning("There are some discrepancies in the inner working of some python modules between the Windows and Linux implementation that may impact how the bot works.")
+        logger.warning("The bot was developped primarly for Linux. There is no guarranties that everything will work as intended on Windows.")
+    else:
+        if platform.platform == "Darwin":
+            logger.warning("[MACOS] The bot is currently running on MacOS.")
+            logger.warning("The platform hasn't been tested at all.")
+            logger.warning("Be aware that you may need to install additional packages and/or things may break.")
 
     if os.path.isdir(config.downloadDirectory): # Preparing download folder
         logger.info("Cleaning up download folder...")
