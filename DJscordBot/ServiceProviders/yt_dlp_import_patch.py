@@ -16,6 +16,6 @@ def patch(source, patch, name):
 patch('yt_dlp.extractor.youtube.pot._provider',
       'DJscordBot.ServiceProviders.yt_dlp_patches.yt_dlp__provider',
       "pot._provider")
-patch('yt_dlp.extractor.youtube._provider',
+patch('yt_dlp.extractor.youtube._video',
       'DJscordBot.ServiceProviders.yt_dlp_patches.yt_dlp__video',
       "_video")

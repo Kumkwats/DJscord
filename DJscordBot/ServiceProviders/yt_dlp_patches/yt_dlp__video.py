@@ -15,7 +15,7 @@ import time
 import traceback
 import urllib.parse
 
-from ._base import (
+from yt_dlp.extractor.youtube._base import (
     INNERTUBE_CLIENTS,
     BadgeType,
     GvsPoTokenPolicy,
@@ -26,12 +26,12 @@ from ._base import (
     _split_innertube_client,
     short_client_name,
 )
-from .pot._director import initialize_pot_director
-from .pot.provider import PoTokenContext, PoTokenRequest
-from ..openload import PhantomJSwrapper
-from ...jsinterp import JSInterpreter, LocalNameSpace
-from ...networking.exceptions import HTTPError
-from ...utils import (
+from yt_dlp.extractor.youtube.pot._director import initialize_pot_director
+from yt_dlp.extractor.youtube.pot.provider import PoTokenContext, PoTokenRequest
+from yt_dlp.extractor.openload import PhantomJSwrapper
+from yt_dlp.jsinterp import JSInterpreter, LocalNameSpace
+from yt_dlp.networking.exceptions import HTTPError
+from yt_dlp.utils import (
     NO_DEFAULT,
     ExtractorError,
     LazyList,
@@ -71,7 +71,7 @@ from ...utils import (
     urljoin,
     variadic,
 )
-from ...utils.networking import clean_headers, clean_proxies, select_proxy
+from yt_dlp.utils.networking import clean_headers, clean_proxies, select_proxy
 
 STREAMING_DATA_CLIENT_NAME = '__yt_dlp_client'
 STREAMING_DATA_FETCH_SUBS_PO_TOKEN = '__yt_dlp_fetch_subs_po_token'
