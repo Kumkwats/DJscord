@@ -55,7 +55,21 @@ ydl_opts = {
 
     ### Options for the downloader
 
-    'noprogress': True
+    'noprogress': True,
+
+
+    'extractor_args': {
+        
+        'youtbe': {
+            'skip': ['translated_subs'],
+            # 'player-client': ['mweb'],
+            # 'player-skip': ['webpage'],
+            'max-comments': ['0','0','0','0']
+        },
+        'youtubepot-bgutilhttp': { 
+            'base_url': [f'http://{config.bgutil_server_ip}:4416']
+        }
+    }
 }
 
 ydl = yt_dlp.YoutubeDL(ydl_opts)
@@ -160,7 +174,11 @@ class YoutubeAPI():
 
     @classmethod
     def get_data_sync(cls, youtube_url: str) -> CommonResponseData:
-        request_data = ydl.extract_info(youtube_url, download=False)
+        try:
+            request_data = ydl.extract_info(youtube_url, download=False)
+        except Exception as ex:
+            logger.exception(ex)
+            return None
         return CommonResponseData(PROVIDER, request_data['id'], request_data, cls.infer_type_from_request_url(youtube_url))
     
 
@@ -196,7 +214,7 @@ class YoutubeAPI():
                 if user_update_coroutine is not None:
                     time_elapsed = time.time() - start_time
                     await user_update_coroutine(time_elapsed)
-            asyncio.sleep(0.15)
+            await asyncio.sleep(0.15)
 
         if os.name != "nt":
             response_data: CommonResponseData = receiver.recv()

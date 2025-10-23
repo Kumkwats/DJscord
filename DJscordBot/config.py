@@ -71,6 +71,12 @@ class Config():
             else:
                 logger.info(f"[SPOTIFY] research is DISABLED")
 
+            if 'bgutil-server-ip' in self.conf:
+                self.bgutil_server_ip = self.conf['bgutil-server-ip']
+            else:
+                self.bgutil_server_ip = "127.0.0.1"
+            logger.info(f"[POT] Will attempt to get a PO Token at this IP : {self.bgutil_server_ip}")
+
             self.debug: bool = False
             if 'debug' in self.conf:
                 self.debug = self.conf['debug']
