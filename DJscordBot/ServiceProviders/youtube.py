@@ -29,11 +29,14 @@ logger = get_logger("djscordbot.youtube")
 # Suppress noise about console usage from errors
 yt_dlp.utils.bug_reports_message = lambda before=';': ''
 
-ydl_opts = {
+
+opts_outtmpl = config.downloadDirectory + '%(extractor)s-%(id)s-%(title)s.%(ext)s'
+
+opts_default = {
     # Video format code. See options.py for more information.
     'format': 'bestaudio[format_note*=original]/bestaudio',
     # Template for output names.
-    'outtmpl': config.downloadDirectory + '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'outtmpl': opts_outtmpl,
     # Do not allow "&" and spaces in file names
     'restrictfilenames': True, 
     # Download single video instead of a playlist if in doubt.
@@ -42,6 +45,10 @@ ydl_opts = {
     'nocheckcertificate': True,
     # Do not stop on download errors.
     'ignoreerrors': True,
+    # A class having a `debug`, `warning` and `error` function where each has a single string parameter, the message to be logged.
+    # For compatibility reasons, both debug and info messages are passed to `debug`.
+    # A debug message will have a prefix of `[debug] ` to discern it from info messages.
+    'logger': get_logger("yt-dlp"),
     # Log messages to stderr instead of stdout.
     'logtostderr': False,       
     # Print additional info to stdout.
@@ -49,7 +56,7 @@ ydl_opts = {
     # Do not print messages to stdout.
     'quiet': False,
     # Do not print out anything for warnings.
-    'no_warnings': False,
+    'no_warnings': True,
     # Prepend this string if an input url is not valid. 'auto' for elaborate guessing
     'default_search': 'auto',
     # Client-side IP address to bind to.
@@ -63,10 +70,10 @@ ydl_opts = {
 
     'extractor_args': {
         
-        'youtbe': {
+        'youtube': {
             'skip': ['translated_subs'],
-            # 'player-client': ['mweb'],
-            # 'player-skip': ['webpage'],
+            'player-client': ['mweb'],
+            'player-skip': ['webpage'],
             'max-comments': ['0','0','0','0']
         },
         'youtubepot-bgutilhttp': { 
@@ -75,13 +82,21 @@ ydl_opts = {
     }
 }
 
-ydl = yt_dlp.YoutubeDL(ydl_opts)
+ydl_downloader_opts = opts_default.copy()
+ydl_downloader_opts['extract_flat'] = 'True' #downloader never downloads a playlist directly
+ydl_downloader = yt_dlp.YoutubeDL(ydl_downloader_opts)
 oldTime = 0
 
 
 
-
-
+ydl_extractor_opts = opts_default.copy()
+ydl_extractor_opts['logger'] = get_logger('yt-dlp_search')
+ydl_extractor_opts['extractor_args']['youtube'] = {
+    'skip': ['translated_subs'],
+    'player-skip': ['js', 'configs']
+}
+ydl_extractor_opts['skip_download'] = True
+ydl_extractor = yt_dlp.YoutubeDL(ydl_extractor_opts)
 
 
 #region Youtube Objects
@@ -119,7 +134,7 @@ class   YoutubeVideo(YoutubeBaseObject):
         self.is_live: bool = request_data['is_live']
 
     def get_filename(self) -> str:
-        return ydl.prepare_filename(self._raw_data)[len(config.downloadDirectory):]
+        return ydl_downloader.prepare_filename(self._raw_data)[len(config.downloadDirectory):]
 
     def __str__(self):
         return f"Vidéo youtube | titre: '{self.name}' | id: '{self.id}'"
@@ -172,13 +187,13 @@ class YoutubeSearch(YoutubeBaseObject):
 class YoutubeAPI():
     @classmethod
     def search_sync(cls, query: str) -> YoutubeSearch:
-        request_data = ydl.extract_info(f"ytsearch:{query}", download=False)
+        request_data = ydl_extractor.extract_info(f"ytsearch:{query}", download=False)
         return YoutubeSearch(request_data)
 
     @classmethod
     def get_data_sync(cls, youtube_url: str) -> CommonResponseData:
         try:
-            request_data = ydl.extract_info(youtube_url, download=False)
+            request_data = ydl_extractor.extract_info(youtube_url, download=False)
         except Exception as ex:
             logger.exception(ex)
             return None
@@ -234,14 +249,14 @@ class YoutubeAPI():
     async def search_async(cls, query: str, user_update_coroutine = None, frequency_update: int = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> YoutubeSearch:
         if os.name == "nt":
             def search_extract_coro(query, returned_response_data: CommonResponseData):
-                raw_data = ydl.extract_info(query, download=False)
+                raw_data = ydl_extractor.extract_info(query, download=False)
                 if cls.validate_basic_raw_data(raw_data):
                     returned_response_data.apply_values(CommonResponseData(PROVIDER, raw_data['id'], raw_data, 'search'))
                 else:
                     returned_response_data = None
         else:
             def search_extract_coro(query: str, pipe_sender: Connection):
-                raw_data = ydl.extract_info(query, download=False)
+                raw_data = ydl_extractor.extract_info(query, download=False)
                 if cls.validate_basic_raw_data(raw_data):
                     pipe_sender.send(CommonResponseData(PROVIDER, raw_data['id'], raw_data, 'search'))
                 else:
@@ -261,14 +276,14 @@ class YoutubeAPI():
         #extractor
         if os.name == "nt":
             def data_extract_coro(query, response_data: CommonResponseData):
-                raw_data = ydl.extract_info(query, download=False)
+                raw_data = ydl_extractor.extract_info(query, download=False)
                 if cls.validate_basic_raw_data(raw_data):
                     response_data.apply_values(CommonResponseData(PROVIDER, raw_data['id'], raw_data, cls.infer_type_from_request_url(query)))
                 else:
                     response_data = None
         else:
             def data_extract_coro(query: str, pipe_sender: Connection):
-                raw_data = ydl.extract_info(query, download=False)
+                raw_data = ydl_extractor.extract_info(query, download=False)
                 if cls.validate_basic_raw_data(raw_data):
                     pipe_sender.send(CommonResponseData(PROVIDER, raw_data['id'], raw_data, cls.infer_type_from_request_url(query)))
                 else:
@@ -373,9 +388,9 @@ class YoutubeAPI():
         time_since_last_update: float = frequency_update #used to calculate when to print
 
         if os.name == "nt": # 'nt' => Windows; Multiprocessing doesn't work similarly between Windows and Linux and causes problems that I don't want to deal with yet so I'm bringing back the old way for Windows
-            download_process: Thread = Thread(target=ydl.download, args=[video.web_url])
+            download_process: Thread = Thread(target=ydl_downloader.download, args=[video.web_url])
         else:
-            download_process: Process = Process(target=ydl.download, args=[video.web_url])
+            download_process: Process = Process(target=ydl_downloader.download, args=[video.web_url])
         download_process.start()
 
         while download_process.is_alive():

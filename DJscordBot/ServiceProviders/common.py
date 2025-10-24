@@ -22,5 +22,6 @@ class CommonResponseData():
         self.data = other_response_data.data
         self.inferred_type = other_response_data.inferred_type
 
+
     def __str__(self):
         return f"RequestData from [{self.provider}] API of element with provider ID of '{self.provider_api_id}'"

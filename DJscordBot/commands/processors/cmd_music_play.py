@@ -20,7 +20,7 @@ from ...Managers.queueManager import QueueManager
 from ...utils.discord import InteractionWrapper
 
 from ...logging.utils import get_logger
-logger = get_logger("djscordbot.play_cmd_processing")
+logger = get_logger("djscordbot.music.play_processor")
 
 
 BYPASS_SONG_LINK = False
@@ -341,7 +341,6 @@ class PlayCmdProcessor():
         failed: int = 0
 
         for i in range(number_of_entries):
-            
             #Check connection
             if not queue.is_connected:
                 return False
