@@ -3,31 +3,34 @@ import asyncio
 
 import discord
 
-from DJscordBot.config import config
-from DJscordBot.Types.queue import Queue
+
+from ..config import config
+from ..client import DJscordClient
+from ..Types.queue import Queue
 
 class QueueManager():
     __queues: 'dict[int, Queue]' = {}
 
     @classmethod
-    def create_queue(cls, guild_id: int, voice_client: discord.VoiceClient, text_channel: discord.TextChannel) -> Queue:
-        cls.__queues[guild_id] = Queue(guild_id, voice_client, text_channel)
+    async def create_queue(self, guild_id: int, voice_client: discord.VoiceClient, text_channel: discord.TextChannel, bot_user: DJscordClient) -> Queue:
+        self.__queues[guild_id] = Queue(guild_id, voice_client, text_channel)
         print(f"[QUEUE.CREATE] Created queue for guild ({guild_id})")
-        return cls.__queues[guild_id]
+        await self.__queues[guild_id].boot(bot_user)
+        return self.__queues[guild_id]
 
     @classmethod
-    def get_queue(cls, guild_id: int) -> Queue | None:
-        if not cls.is_guild_active(guild_id):
+    def get_queue(self, guild_id: int) -> Queue | None:
+        if not self.is_guild_active(guild_id):
             return None
-        return cls.__queues[guild_id]
+        return self.__queues[guild_id]
 
     @classmethod
-    def get_every_guild_id(cls):
-        return cls.__queues.keys()
+    def get_every_guild_id(self):
+        return self.__queues.keys()
     
     @classmethod
-    def is_guild_active(cls, guild_id):
-        return guild_id in cls.__queues
+    def is_guild_active(self, guild_id):
+        return guild_id in self.__queues
 
 
     # @classmethod

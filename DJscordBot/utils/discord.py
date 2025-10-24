@@ -1,11 +1,11 @@
 import time
 
 import discord
-from discord import InteractionMessage, Interaction
+from discord import Interaction
 
-from DJscordBot.Types.queue import Queue
-from DJscordBot.Types.entry import Entry, EntryType
-from DJscordBot.utils import time_format
+from ..Types.queue import Queue
+from ..Types.entry import Entry, EntryType
+from .format import time_format
 
 
 

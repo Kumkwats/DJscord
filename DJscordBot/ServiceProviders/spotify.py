@@ -1,8 +1,8 @@
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
-from DJscordBot.config import config
-from DJscordBot.ServiceProviders.common import CommonResponseData
+from ..config import config
+from .common import CommonResponseData
 
 
 PLAYLIST_SIZE_LIMIT = 100

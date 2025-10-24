@@ -10,17 +10,17 @@ from typing_extensions import Self
 
 import discord
 
-from DJscordBot.djscordBot import DJscordBot
-from DJscordBot.Managers.queueManager import QueueManager
-from DJscordBot.ServiceProviders import youtube, spotify
-from DJscordBot.Types.queue import Queue
-from DJscordBot.config import config
-from DJscordBot.Types.enums import PlayQueryType
-from DJscordBot.Types.entry import Entry, EntryPlaylist
-from DJscordBot.discord.utils import InteractionWrapper
+from ...config import config
+from ...client import DJscordClient
+from ...ServiceProviders import youtube, spotify
+from ...Types.queue import Queue
+from ...Types.enums import PlayQueryType
+from ...Types.entry import Entry, EntryPlaylist
+from ...Managers.queueManager import QueueManager
+from ...utils.discord import InteractionWrapper
 
-import DJscordBot.logging.utils
-logger = DJscordBot.logging.utils.get_logger("djscordbot.play_cmd_processing")
+from ...logging.utils import get_logger
+logger = get_logger("djscordbot.play_cmd_processing")
 
 
 BYPASS_SONG_LINK = False
@@ -28,13 +28,13 @@ PLAYLIST_LIMIT_ENTRIES = 30
 
 
 
-class MusicPlayCommandTransaction():
+class PlayCmdProcessor():
     text_update_interval = 1
     playlist_lock: Lock = Lock()
     playlist_in_process: bool = False
     transaction_locking: Self = None
 
-    def __init__(self, interac_wrap: InteractionWrapper, bot: DJscordBot):
+    def __init__(self, interac_wrap: InteractionWrapper, bot: DJscordClient):
         # self.ctx: discord.ApplicationContext = ctx
         # self.response_wrapper: InteractionWrapper = InteractionWrapper(ctx)
         self.response_wrapper: InteractionWrapper = interac_wrap
@@ -267,10 +267,10 @@ class MusicPlayCommandTransaction():
                 await self.response_wrapper.append_to_last_whisper(f"- Informations reçues sur la playlist **{yt_playlist.name}**", True)
 
                     
-                if MusicPlayCommandTransaction.playlist_lock.locked():
+                if PlayCmdProcessor.playlist_lock.locked():
                     return await self.response_wrapper.whisper_to_author(f":warning: Une Playlist est en cours de téléchargement, veuillez réessayer après la fin de celle en cours")
                 else:
-                    with MusicPlayCommandTransaction.playlist_lock:
+                    with PlayCmdProcessor.playlist_lock:
 
                         await self.response_wrapper.send_message_in_author_channel(f"L'ajout d'une playlist vient d'être initié par {self.response_wrapper.author.nick} !\n-# Pour en ajouter une autre, vous devrez attendre la fin de celle-ci")
 
@@ -380,7 +380,7 @@ class MusicPlayCommandTransaction():
         return (True, results_dict)
 
     async def __yt_download_playlist_canceled(self):
-        MusicPlayCommandTransaction.playlist_in_process = False
+        PlayCmdProcessor.playlist_in_process = False
         await self.response_wrapper.whisper_to_author(f":warning: Téléchargement annulé !")
         await self.response_wrapper.send_message_in_author_channel(f"Téléchargement annulé\n-# Vous pouvez démarrer le téléchargement d'une playlist")
         return

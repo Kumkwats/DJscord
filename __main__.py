@@ -10,13 +10,11 @@ import traceback
 import discord
 from discord import app_commands, Intents, Interaction
 
-import DJscordBot.ServiceProviders.yt_dlp_import_patch
-
-from DJscordBot.djscordBot import DJscordBot
+from DJscordBot.client import DJscordClient
 from DJscordBot.config import config
 
 from DJscordBot.logging.utils import get_logger
-from DJscordBot.discord.utils import InteractionWrapper
+from DJscordBot.utils.discord import InteractionWrapper
 
 from DJscordBot.commands.music import Music
 from DJscordBot.commands.manage import Manage
@@ -53,7 +51,7 @@ if __name__ == "__main__":
     intents.messages = True
     intents.message_content = True
 
-    bot: DJscordBot = DJscordBot(description="djscord !", intents=intents)
+    bot: DJscordClient = DJscordClient(description="djscord !", intents=intents)
     
     logger.debug("Registering events...")
 

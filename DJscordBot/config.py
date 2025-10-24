@@ -1,7 +1,7 @@
 import os
 import json
 
-from DJscordBot.logging.utils import get_logger
+from .logging.utils import get_logger
 logger = get_logger("djscordbot.config")
 
 CFGFILE: str = "resources/config.json"

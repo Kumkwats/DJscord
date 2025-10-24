@@ -5,16 +5,18 @@ import time
 import discord
 from discord.ext import tasks
 
-from DJscordBot.djscordBot import DJscordBot
-from DJscordBot.Managers.queueManager import QueueManager
-from DJscordBot.discord.utils import InteractionWrapper, EmbedBuilder
-from DJscordBot.Types.entry import Entry, EntryPlaylist
-from DJscordBot.Types.queue import Queue
-from DJscordBot.Types.enums import AfterEntryPlaybackAction, RepeatMode
-from DJscordBot.utils import time_format, pick_sound_file
-from DJscordBot.config import config
 
-from DJscordBot.Future.cmdPlayTransaction import MusicPlayCommandTransaction
+from ..config import config
+from ..client import DJscordClient
+from ..utils.discord import InteractionWrapper, EmbedBuilder
+from ..Types.entry import Entry, EntryPlaylist
+from ..Types.queue import Queue
+from ..Types.enums import AfterEntryPlaybackAction, RepeatMode
+from ..Managers.queueManager import QueueManager
+from ..utils.format import time_format
+from ..utils.io import pick_sound_file
+
+from .processors.cmd_music_play import PlayCmdProcessor
 
 
 VOICE_ACTIVITY_CHECK_DELTA = 10 #number of seconds between every AFK check
@@ -25,7 +27,7 @@ VOICE_ACTIVITY_CHECK_DELTA = 10 #number of seconds between every AFK check
 
 
 class Music():
-    def __init__(self, bot: DJscordBot):
+    def __init__(self, bot: DJscordClient):
         self.bot = bot
         if config.afkLeaveActive:
             #self.music_timeout.start()
@@ -80,12 +82,9 @@ class Music():
             if new_voice_client is None:
                 print(f"[CONNECT.VC.EXCEPTION] VC is None")
 
-            queue = QueueManager.create_queue(guild_id, new_voice_client, interac_wrapper.interaction.channel)
-            boot_entry = self.__create_boot_entry()
-            if boot_entry is not None:
-                await queue.add_entry(boot_entry)
+            queue = await QueueManager.create_queue(guild_id, new_voice_client, interac_wrapper.interaction.channel, self.bot)
 
-            # queue = await self.__initialize_queue(ctx)
+
 
         #Existing queue checks
         else:
@@ -114,7 +113,7 @@ class Music():
         
 
 
-        play_cmd_transaction: MusicPlayCommandTransaction = MusicPlayCommandTransaction(interac_wrapper, self.bot)
+        play_cmd_transaction: PlayCmdProcessor = PlayCmdProcessor(interac_wrapper, self.bot)
         return await play_cmd_transaction.process_query(cmd_query)
 
 
@@ -553,20 +552,7 @@ class Music():
 
 
 
-    def __create_boot_entry(self) -> Entry | None:
-        check, file = pick_sound_file("startup")
-        if check:
-            if file != "":
-                new_entry = Entry("Booting up...", self.bot.user, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-                new_entry.add_image("https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/3ddaa372-c58c-4587-911e-1d625dff64dc/dapv26n-b138c16c-1cfc-45c3-9989-26fcd75d3060.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvM2RkYWEzNzItYzU4Yy00NTg3LTkxMWUtMWQ2MjVkZmY2NGRjXC9kYXB2MjZuLWIxMzhjMTZjLTFjZmMtNDVjMy05OTg5LTI2ZmNkNzVkMzA2MC5qcGcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.PnU42OFMHcio7nJ4a5Jsp8C-d6exHqd3vInU1682x1E")
-                new_entry.add_description("Chaîne : [DJPatrice](https://github.com/Kumkwats/DJscord)")
-                new_entry.map_to_file(file)
-                print(f"[QUEUE.STARTUP] Startup file added to queue")
-                return new_entry
-            else:
-                print(f"[QUEUE.STARTUP] Aucun fichier trouvé")
-        else:
-            print(f"[QUEUE.STARTUP] Dossier Sounds inexistant")
+    
 
     def __get_voice_client_from_guild(self, guild_id: int) -> discord.VoiceClient | None:
         voice_client_list: list[discord.VoiceClient] = self.bot.voice_clients

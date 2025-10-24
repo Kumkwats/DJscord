@@ -13,18 +13,21 @@ import yt_dlp
 #from youtubesearchpython.__future__ import VideosSearch
 
 
-from DJscordBot.config import config
-from DJscordBot.ServiceProviders.common import CommonResponseData
+from ..config import config
+
+from .common import CommonResponseData
 
 PLAYLIST_SIZE_LIMIT: int = 100
 PROVIDER: str = 'youtube'
 DEFAULT_ASYNC_UPDATE_FREQ: float = 2
 
-import DJscordBot.logging.utils
-logger = DJscordBot.logging.utils.get_logger("djscordbot.youtube")
+
+from ..logging.utils import get_logger
+logger = get_logger("djscordbot.youtube")
+
 
 # Suppress noise about console usage from errors
-yt_dlp.utils.bug_reports_message = lambda: ''
+yt_dlp.utils.bug_reports_message = lambda before=';': ''
 
 ydl_opts = {
     # Video format code. See options.py for more information.

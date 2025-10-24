@@ -3,15 +3,17 @@ import time
 import asyncio
 import traceback
 
-from enum import Enum
-
 import discord
 
-from DJscordBot.config import config
-from DJscordBot.Types.entry import Entry
-from DJscordBot.utils import time_format
 
-from DJscordBot.Types.enums import RepeatMode, AfterEntryPlaybackAction
+from ..config import config
+from ..client import DJscordClient
+from ..utils.format import time_format
+from ..utils.io import pick_sound_file
+
+from .entry import Entry
+from .enums import RepeatMode, AfterEntryPlaybackAction
+
 
 
 
@@ -172,6 +174,31 @@ class Queue():
     def move_text_channel(self, new_text_channel: discord.TextChannel):
         #change listening text channel
         self.text_channel = new_text_channel
+
+
+    #audio boot sequence
+    async def boot(self, bot_user: DJscordClient):
+        boot_entry = self.__create_boot_entry(bot_user)
+        if boot_entry is not None:
+            await self.add_entry(boot_entry)
+        pass
+
+    def __create_boot_entry(self, bot_user: DJscordClient) -> Entry | None:
+        check, file = pick_sound_file("startup")
+        if check:
+            if file != "":
+                new_entry = Entry("Booting up...", bot_user.user, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+                new_entry.add_image("https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/3ddaa372-c58c-4587-911e-1d625dff64dc/dapv26n-b138c16c-1cfc-45c3-9989-26fcd75d3060.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvM2RkYWEzNzItYzU4Yy00NTg3LTkxMWUtMWQ2MjVkZmY2NGRjXC9kYXB2MjZuLWIxMzhjMTZjLTFjZmMtNDVjMy05OTg5LTI2ZmNkNzVkMzA2MC5qcGcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.PnU42OFMHcio7nJ4a5Jsp8C-d6exHqd3vInU1682x1E")
+                new_entry.add_description("Chaîne : [DJPatrice](https://github.com/Kumkwats/DJscord)")
+                new_entry.map_to_file(file)
+                print(f"[QUEUE.STARTUP] Startup file added to queue")
+                return new_entry
+            else:
+                print(f"[QUEUE.STARTUP] Aucun fichier trouvé")
+        else:
+            print(f"[QUEUE.STARTUP] Dossier Sounds inexistant")
+
+##warning  FFMPEG args for multiple stream at different time : https://stackoverflow.com/questions/37297856/ffmpeg-combine-video-files-with-different-start-times
 
 
     #Playback

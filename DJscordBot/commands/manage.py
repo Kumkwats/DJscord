@@ -2,18 +2,13 @@
 #import asyncio
 
 import discord
-#from discord.channel import VoiceChannel
-#from discord.ext import commands
 
-from DJscordBot.djscordBot import DJscordBot
-from DJscordBot.discord.utils import InteractionWrapper
+from ..client import DJscordClient
+from ..utils.discord import InteractionWrapper
 
-#from DJscordBot.config import config
-#from DJscordBot.utils import pick_sound_file
-from DJscordBot.Managers.queueManager import QueueManager
 
 class Manage():
-    def __init__(self, bot: DJscordBot):
+    def __init__(self, bot: DJscordClient):
         self.bot = bot
 
     async def ping(self, ctx: InteractionWrapper): # Show latency from API and Voice channel if connected

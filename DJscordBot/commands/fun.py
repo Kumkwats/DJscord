@@ -6,18 +6,7 @@ Returns:
 
 import re
 import discord
-from discord.ext import commands
 
-from DJscordBot.djscordBot import DJscordBot
-
-# class Fun(commands.Cog):
-#     def __init__(self, bot: DJscordBot):
-#         self.bot = bot
-
-#     @commands.command()
-#     async def ah(self, context, *, query: str = None):
-#         if query == "quel plaisir":
-#             return await context.send('$ahh')
 
 async def chocolatine(message: discord.Message):
     words = re.split('\\s+|\'|"|,|!|\?', message.content)
