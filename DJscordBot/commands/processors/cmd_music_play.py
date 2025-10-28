@@ -12,7 +12,7 @@ import discord
 
 from ...config import config
 from ...client import DJscordClient
-from ...ServiceProviders import youtube, spotify
+from ...ServiceProviders import youtube, spotify, common
 from ...Types.queue import Queue
 from ...Types.enums import PlayQueryType
 from ...Types.entry import Entry, EntryPlaylist
@@ -184,8 +184,35 @@ class PlayCmdProcessor():
                     logger.info(f"[PLAY.TRANSACTION.FAILED] Failed download")
                     return await self.response_wrapper.whisper_to_author(f"{download_result_message}")
             
+
+
+            case PlayQueryType.LINK_OTHER:
+                #TODO formalize
+                logger.info(f"[QUERY.PROCESS.LINK] Begin process of link \"{query}\" (GID:{self.response_wrapper.guild_id})")
+                result: common.CommonResponseData = await youtube.YoutubeAPI.get_data_async(query, self.__retrieve_data_feedback)
+                if result is None or result.data is None or len(result.data) <= 0:
+                    return await self.response_wrapper.whisper_to_author(":warning: Ce site n'est pas supporté")
+                new_entry: Entry = Entry(result.data['title'], self.response_wrapper.author, query)
+                success, filename = await youtube.YoutubeAPI.link_download(query, result.data)
+                if not success:
+                    return await self.response_wrapper.whisper_to_author(":warning: Echec du téléchargement du fichier associé")
+                
+                try:
+                    file_size = os.path.getsize(config.downloadDirectory + filename)
+                except:
+                    logger.error("[YOUTUBE.DOWNLOAD.FILE_SIZE.ERROR] trying to find a file that doesn't exist")
+                    return (False, f":warning: Erreur lors du téléchargement de {new_entry.title}")
+                new_entry.map_to_file(filename, result.data['duration'], file_size)
+                
+                queue: Queue = self.__get_queue_from_ctx()
+                position = await queue.add_entry(new_entry)
+                logger.info(f"[PLAY.TRANSACTION.SUCCESS] '{result.data['id']}' has been added to queue")
+                return await self.response_wrapper.whisper_to_author(f"[{position}] **{new_entry.title}** a été ajouté à la file d'attente\n{self.__get_processing_time()}")
+
+                    
+
             case _:
-                return await self.response_wrapper.whisper_to_author(":warning: Cette fonctionnalité n'est pas encore ré-implémentée")
+                return await self.response_wrapper.whisper_to_author(":warning: Cette fonctionnalité n'est pas encore implémentée")
 
 
     #endregion
@@ -205,8 +232,10 @@ class PlayCmdProcessor():
             return PlayQueryType.LINK_SPOTIFY
         if query.startswith(("https://youtu.be", "https://www.youtube.com", "https://youtube.com")):
             return PlayQueryType.LINK_YOUTUBE
-        if query.startswith(("http://", "https://", "udp://")):
-            return PlayQueryType.OTHER_STREAM
+        if query.startswith(("http://", "https://")):
+            return PlayQueryType.LINK_OTHER
+        if query.startswith(("udp://")):
+            return PlayQueryType.OTHER
         return PlayQueryType.SEARCH_QUERY
     
     def __get_queue_from_ctx(self) -> Queue | None:
