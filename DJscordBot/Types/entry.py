@@ -49,6 +49,9 @@ class Entry():
         # stream
         self.stream_link: str = None
 
+        self.is_saturated = False
+        self.is_reverse = False
+
         
 
     def add_description(self, description):

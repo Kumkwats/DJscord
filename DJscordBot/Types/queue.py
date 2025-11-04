@@ -1,4 +1,5 @@
 import os
+import random
 import time
 import asyncio
 import traceback
@@ -178,7 +179,16 @@ class Queue():
 
     #audio boot sequence
     async def boot(self, bot_user: DJscordClient):
-        boot_entry = self.__create_boot_entry(bot_user)
+        boot_entry: Entry = self.__create_boot_entry(bot_user)
+        #TODO add config option
+        # rare audio start filter
+        if random.random() < 0.01 :
+            boot_entry.is_saturated = True
+            boot_entry.title = boot_entry.title.upper()
+        if random.random() < 0.01 :
+            boot_entry.is_reverse = True
+            boot_entry = boot_entry.title[::-1]
+
         if boot_entry is not None:
             await self.add_entry(boot_entry)
         pass
@@ -222,7 +232,7 @@ class Queue():
         else:
             filename: str = entry.filename
         
-
+        
         
         
 
@@ -233,10 +243,23 @@ class Queue():
         else:
             timestart = 0
 
+        is_saturated = entry.is_saturated
+        is_reversed = entry.is_reverse
+        custom_options = ""
+        if is_saturated or is_reversed:
+            custom_options += f"-filter:a "
+            contains_filters = False
+            if is_saturated:
+                custom_options += f"{"; " if contains_filters else ""}asoftclip=type=hard:threshold=0.01:output=8"
+                contains_filters = True
+            if is_reversed:
+                custom_options += f"{"; " if contains_filters else ""}areverse"
+                contains_filters = True
+
         player: discord.FFmpegOpusAudio = discord.FFmpegOpusAudio(
             filename,
             before_options = before,
-            options = "-vn")
+            options = f"-vn {custom_options}")
         
         self.stopped = False
         self.__voice_client.play(
