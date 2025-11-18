@@ -29,7 +29,7 @@ VOICE_ACTIVITY_CHECK_DELTA = 10 #number of seconds between every AFK check
 class Music():
     def __init__(self, bot: DJscordClient):
         self.bot = bot
-        if config.afkLeaveActive:
+        if config.leave_afk_enabled:
             #self.music_timeout.start()
             pass
 
@@ -583,7 +583,7 @@ class Music():
                 if guild_queue.is_playing:
                     guild_queue.update_last_voice_activity()
                 else:
-                    if time.time() - guild_queue.last_voice_activity_time >= config.afkLeaveTime*60:
+                    if time.time() - guild_queue.last_voice_activity_time >= config.leave_afk_time*60:
                         guilds_to_disconnect.append(guild_id)
                         print(f"Timeout: [INFO] Guild ({guild_id}) has been inactive for too long, will be removed (AFK time = {time.time() - guild_queue.last_voice_activity_time} seconds)")
                         

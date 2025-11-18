@@ -5,13 +5,15 @@ from ..config import config
 from .common import CommonResponseData
 
 
-PLAYLIST_SIZE_LIMIT = 100
+PLAYLIST_SIZE_LIMIT = 50
 PROVIDER = 'spotify'
 
 
-if config.spotifyEnabled:
-    SPOTIPY_CLIENT_ID = config.conf['spotify-client-id']
-    SPOTIPY_CLIENT_SECRET = config.conf['spotify-client-secret']
+MODULE_AVAILABLE = config.spotify_id is not None and config.spotify_secret is not None
+
+if MODULE_AVAILABLE:
+    SPOTIPY_CLIENT_ID = config.spotify_id
+    SPOTIPY_CLIENT_SECRET = config.spotify_secret
     manager: SpotifyClientCredentials = SpotifyClientCredentials(SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET)
     sp: spotipy.Spotify = spotipy.Spotify(client_credentials_manager=manager)
 

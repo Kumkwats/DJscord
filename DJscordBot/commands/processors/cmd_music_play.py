@@ -6,7 +6,11 @@ import traceback
 import requests
 
 from threading import Lock
-from typing_extensions import Self
+import sys
+if sys.version_info.minor <= 12:
+    from typing_extensions import Self
+else:
+    from typing import Self
 
 import discord
 

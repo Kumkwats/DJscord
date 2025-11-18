@@ -63,7 +63,7 @@ if __name__ == "__main__":
         await bot.change_presence(
             activity=discord.Activity(
             type=discord.ActivityType.listening,
-            name=config.GetPrefix()+"help"))
+            name=config.get_prefix()+"help"))
 
         logger.info(f"[READY] Logged in as {bot.user} ({bot.user.id})\n---------------- BEGIN LISTENING TO COMMANDS")
 

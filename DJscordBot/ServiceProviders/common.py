@@ -1,4 +1,8 @@
-from typing_extensions import Self
+import sys
+if sys.version_info.minor <= 12:
+    from typing_extensions import Self
+else:
+    from typing import Self
 
 class CommonResponseData():
     def __init__(self, provider: str, provider_api_id: str, request_data, inferred_type: str = None):

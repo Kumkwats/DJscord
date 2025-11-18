@@ -180,14 +180,15 @@ class Queue():
     #audio boot sequence
     async def boot(self, bot_user: DJscordClient):
         boot_entry: Entry = self.__create_boot_entry(bot_user)
-        #TODO add config option
-        # rare audio start filter
-        if random.random() < 0.01 :
-            boot_entry.is_saturated = True
-            boot_entry.title = boot_entry.title.upper()
-        if random.random() < 0.01 :
-            boot_entry.is_reverse = True
-            boot_entry = boot_entry.title[::-1]
+
+
+        if config.allow_startup_filters:
+            if random.random() < 0.01 :
+                boot_entry.is_saturated = True
+                boot_entry.title = boot_entry.title.upper()
+            if random.random() < 0.01 :
+                boot_entry.is_reverse = True
+                boot_entry = boot_entry.title[::-1]
 
         if boot_entry is not None:
             await self.add_entry(boot_entry)
