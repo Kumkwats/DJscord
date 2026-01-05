@@ -142,7 +142,7 @@ class EmbedBuilder():
             if int(stepped_progress) == i:
                 progress_bar_str += "●"
             else:
-                progress_bar_str += "─"
+                progress_bar_str += "▬"
         progress_bar_str += f"]"
         return f"{progress_text}\n{progress_bar_str}"
     

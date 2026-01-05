@@ -2,10 +2,10 @@ import os
 import dotenv
 import json
 
-from .logging.utils import get_logger
-logger = get_logger("djscordbot.config")
+from .app import *
 
-CFGFILE: str = "resources/config.json"
+from .logging.utils import get_logger
+logger = get_logger(f"{ROOT_LOGGER}.config")
 
 class Config():
 
@@ -20,8 +20,8 @@ class Config():
         config_dict = {}
 
     # Loading json files
-        if os.path.isfile(CFGFILE):
-            f = open(CFGFILE, 'r')
+        if os.path.isfile(CONFIG_FILE):
+            f = open(CONFIG_FILE, 'r')
             json_config = json.load(f)
             f.close()
             config_dict.update(json_config)
@@ -89,9 +89,9 @@ class Config():
 
     # Audio files locations
         logger.info("[FILES] Will write and read files at those directories (relative to working dir):")
-        self.downloadDirectory = "resources/downloads/" # default downloads directory
+        self.downloadDirectory = DOWNLOAD_FOLDER_PATH # default downloads directory
         logger.info(f"\t\tDownloaded files at: ./{self.downloadDirectory}")
-        self.soundDirectory = "resources/sounds/" # default sounds directory
+        self.soundDirectory = SOUND_FOLDER_PATH # default sounds directory
         logger.info(f"\t\tOther sound files at: ./{self.soundDirectory}")
 
 

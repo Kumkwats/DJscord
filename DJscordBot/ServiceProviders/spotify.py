@@ -9,9 +9,9 @@ PLAYLIST_SIZE_LIMIT = 50
 PROVIDER = 'spotify'
 
 
-MODULE_AVAILABLE = config.spotify_id is not None and config.spotify_secret is not None
+SPOTIFY_AVAILABLE = config.spotify_id is not None and config.spotify_secret is not None
 
-if MODULE_AVAILABLE:
+if SPOTIFY_AVAILABLE:
     SPOTIPY_CLIENT_ID = config.spotify_id
     SPOTIPY_CLIENT_SECRET = config.spotify_secret
     manager: SpotifyClientCredentials = SpotifyClientCredentials(SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET)
