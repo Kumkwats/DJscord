@@ -14,6 +14,8 @@ else:
 
 import discord
 
+from ..._Future.spotify_linker.linker import SpotifyLinker, LinkerAPI as spt_linker
+
 from ...config import config
 from ...client import DJscordClient
 from ...ServiceProviders import youtube, spotify, common
@@ -817,8 +819,22 @@ class PlayCmdProcessor():
             return None
 
 
-
+    # main
     async def __spt_song_link_try_get_response_data(self, spt_item: spotify.SpotifyBaseObject) -> tuple[bool, str, youtube.CommonResponseData]:
+
+        #check if the database has a valid linker
+        linker: SpotifyLinker = spt_linker.get_first_available_linker(spt_item.id)
+
+        if linker is not None: # Attempting to use the valid linker
+            yt_data: youtube.CommonResponseData = await youtube.YoutubeAPI.get_data_async(linker.yt_link, self.__retrieve_data_feedback)
+            if yt_data is None: # When it fails
+                logger.error(f"[SPT_YT.VIDEO.CONVERSION] Stored link has returned None")
+                spt_linker.invalidate_linker(linker) # flags it as a not working link
+                return (False, "Tentative échouée !", None)
+            return (True, "Succès !", yt_data)
+
+
+        # if no valid linkers found
         yt_link = self.__spt_song_link_try_convert(spt_item)
         if yt_link is None:
             logger.error(f"[SPT_YT.VIDEO.CONVERSION] Conversion has failed, is None")
@@ -829,8 +845,13 @@ class PlayCmdProcessor():
             logger.error(f"[SPT_YT.VIDEO.CONVERSION] Converted link has returned None")
             return (False, "Tentative échouée !", None)
 
+        linker = spt_linker.get_linker(spt_item.id, yt_data.provider_api_id)
+        if linker is None:
+            spt_linker.create_new_link(spt_item.id, yt_data.provider_api_id)
+
         return (True, "Succès !", yt_data)
-    
+
+
 
     #endregion
 
