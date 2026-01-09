@@ -1,10 +1,14 @@
 import time
 from enum import Enum, Flag, auto
+from typing import Optional
 
 import discord
 
+from ..bot import BOT_CLIENT
+from .datatypes.queue import Queue
 
-from ..datatypes.queue import Queue
+from ..logging.utils import get_logger
+__logger = get_logger("djscordbot.guild_player")
 
 class PlayerState(Flag):
     PLAYING = auto()
@@ -30,7 +34,7 @@ class AfterPlayAction(Enum):
 
 
 
-class AudioPlayer:
+class GuildPlayer:
     def __init__(self, guild_id):
         self.guild_id: int = guild_id
         self.__state: PlayerState = PlayerState(0)
@@ -44,27 +48,42 @@ class AudioPlayer:
         self.dont_update_cursor_position: bool = False
 
         self.__last_voice_activity_time: int = time.time()
-        # self.__voice_client: discord.VoiceClient = None
+        self.__cached_voice_client: discord.VoiceClient = None
         self.__text_channel: discord.TextChannel = None
 
+        __logger.debug(self.__log_format("Created player"))
+
     @property
-    async def __voice_client(self):
-        
+    def _guild(self) -> Optional[discord.Guild]:
+        return BOT_CLIENT.get_guild(self.guild_id) #TODO what to do when the bot is removed from a guild ?
+
+    @property
+    async def _voice_client(self) -> Optional[discord.VoiceClient]:
+        guild = self._guild
+        return guild.voice_client if guild else None
         
 
 
 
     async def connect(self, voice_channel: discord.VoiceChannel):
-        if self.__voice_client is None:
-            self.__voice_client = await voice_channel.connect(timeout=60)
-        else:
-            self.__voice_client = await voice_channel.connect(timeout=60, cls=self.__voice_client)
+        self.__cached_voice_client = await voice_channel.connect(timeout=60)
+        __logger.debug(self.__log_format(f"Connecting player to voice_channel : {voice_channel.name}"))
+        return
+    
 
     async def reconnect(self) -> bool:
-        if self.__voice_client is None:
+        if self.__cached_voice_client is None:
             return False
-        self.__voice_client = await self.__voice_client.channel.connect(timeout=60, cls=self.__voice_client)
+        self.__cached_voice_client = await self.__cached_voice_client.channel.connect(timeout=60, cls=self.__cached_voice_client)
         return True
     
+
     async def move(self, new_voice_channel: discord.VoiceChannel):
-        await self.__voice_client.move_to(new_voice_channel)
+        await self.__cached_voice_client.move_to(new_voice_channel)
+        __logger.debug(self.__log_format(f"Moved player to voice_channel : {new_voice_channel.name}"))
+
+
+
+
+    def __log_format(self, message: str) -> str:
+        return f"[{self.guild_id}] {message}"
