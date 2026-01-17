@@ -1,11 +1,18 @@
 # DJscord
 
+Discord bot for playing music in server voice channel.
+
 Started as a fork of a friend [repository](https://github.com/yrigaudeau/my-discord-bot) to add some little features and bug fixes but then has become his own custom thing over the years.
 
 Made with **Python 3.12**<br>
 Powered by **discord.py** and **yt-dlp**.
 
-<br><br>
+
+<br>
+
+> [!CAUTION]
+> Be aware that the messages sent by the bot are in the imaginary language known as 	<ins>**French**</ins>
+
 
 # Features
 
@@ -22,14 +29,10 @@ Powered by **discord.py** and **yt-dlp**.
         * Playlist link
 
 
-
-<br><br>
-
+<br>
 
 
 # Config file and the resources folder
-
-
 
 ## The Config file
 A config file is mandatory to run the bot, as it needs a Discord Application Token.
@@ -43,7 +46,6 @@ Although it creates one for you, you still have to replace the field for `discor
 }
 ```
 
-
 The Spotify search isn't enabled by default as it needs credentials to access to the API. If you want to enable adding music from spotify links, you may create a Spotify application and add the following lines to the `config.json` file.
 ```json
 {
@@ -53,12 +55,11 @@ The Spotify search isn't enabled by default as it needs credentials to access to
 ```
 You can create a spotify application by going here https://developer.spotify.com/dashboard/applications
 
+> [!NOTE]
 > Under the hood, the bot will gather the track artist and song name from the Spotify API and then make a YT search query to find a matching video tu use. Most of the times is works fine, but it may give weird results. To give more acurate results, we first try to use the **`song.link`** public API to get a matching video. As of 2025/10/09, the API is limited to 10 request per minute, so if it can't use the API or if any other problem occurs, it will fallback to the default search method.
 
 
-
 <br>
-
 
 
 ## Resources folder
@@ -68,8 +69,7 @@ You may need to create a folder to store the resources that the bot may need, ma
 The bot will pick a random sound for the startup in the `./resources/sounds/startup` folder and for the leave sound in the `./resources/sounds/leave`
 
 
-<br><br><br>
-
+<br>
 
 
 # Installation
@@ -78,11 +78,15 @@ The bot will pick a random sound for the startup in the `./resources/sounds/star
 
 The simplest way to run the bot is to run it in a docker container.
 
+> [!IMPORTANT]
+> Depending on how you've setup Docker, you may need to use `sudo` to run the docker commands
+
+<br>
+
 ### Build image
 
 First, you need to clone the repo and build the image.
 
-> You may need to use sudo to run docker commands
 
 ```bash
 git clone https://github.com/Kumkwats/DJscord.git
@@ -90,6 +94,7 @@ cd DJscord
 docker build . -t djscordbot:latest
 ```
 
+<br>
 
 ### Run with mounted resources folder
 
@@ -99,15 +104,15 @@ Mounting the resource folder is necessary as the config file and other resources
 docker run -d --name djscordbot --restart unless-stopped -v ./resources/:/app/resources djscordbot:latest
 ```
 
+<br>
+
 ### Stop the container
 ```bash
 docker stop djscordbot
 ```
 
 
-
-<br><br>
-
+<br>
 
 
 ## Docker Compose
@@ -127,25 +132,26 @@ services:
 ```
 
 
-<br><br>
-
+<br>
 
 
 ## Installation as a systemd service
 
 ### Clone repo and install dependencies
+
 ```bash
 sudo apt install python3 python3-pip ffmpeg git
 git clone https://github.com/Kumkwats/DJscord.git
 cd DJscord
 pip install -r requirements.txt
 ```
+
 ### Running as user
+
 It's recommended to run the python script as user on the system (not as root). You can run the bot on your current username or create a new one with home folder
 ```bash
 sudo useradd -md /var/lib/djscord djscord
 ```
-
 
 
 ### Run
