@@ -1,5 +1,6 @@
 import os
 import random
+import subprocess
 
 
 from ..config import config
@@ -18,3 +19,17 @@ def pick_sound_file(folder_name: str) -> tuple[bool, str]:
             return True, full_path
         return True, "" # Folder exist but no file found
     return False, "" # Folder does not exist
+
+
+def get_file_duration(filepath: str) -> float:
+    if " " in filepath:
+        filepath = f'"{filepath}"'
+    if not os.path.isfile(filepath):
+        return -1
+    result: subprocess.CompletedProcess = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", f'"{filepath}"'], stdout=subprocess.PIPE)
+    try:
+        _float = float(result.stdout)
+        return _float
+    except ValueError:
+        return -1
+

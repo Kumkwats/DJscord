@@ -1,11 +1,11 @@
 import os
-import asyncio
 import time
 
 import traceback
 import requests
 
 from threading import Lock
+
 import sys
 if sys.version_info.minor <= 12:
     from typing_extensions import Self
@@ -22,6 +22,7 @@ from ...Types.enums import PlayQueryType
 from ...Types.entry import Entry, EntryPlaylist
 from ...Managers.queueManager import QueueManager
 from ...utils.discord import InteractionWrapper
+from ...utils.io import get_file_duration
 
 from ...logging.utils import get_logger
 logger = get_logger("djscordbot.music.play_processor")
@@ -191,27 +192,8 @@ class PlayCmdProcessor():
 
 
             case PlayQueryType.LINK_OTHER:
-                #TODO formalize
                 logger.info(f"[QUERY.PROCESS.LINK] Begin process of link \"{query}\" (GID:{self.response_wrapper.guild_id})")
-                result: common.CommonResponseData = await youtube.YoutubeAPI.get_data_async(query, self.__retrieve_data_feedback)
-                if result is None or result.data is None or len(result.data) <= 0:
-                    return await self.response_wrapper.whisper_to_author(":warning: Ce site n'est pas supporté")
-                new_entry: Entry = Entry(result.data['title'], self.response_wrapper.author, query)
-                success, filename = await youtube.YoutubeAPI.link_download(query, result.data)
-                if not success:
-                    return await self.response_wrapper.whisper_to_author(":warning: Echec du téléchargement du fichier associé")
-                
-                try:
-                    file_size = os.path.getsize(config.downloadDirectory + filename)
-                except:
-                    logger.error("[YOUTUBE.DOWNLOAD.FILE_SIZE.ERROR] trying to find a file that doesn't exist")
-                    return (False, f":warning: Erreur lors du téléchargement de {new_entry.title}")
-                new_entry.map_to_file(filename, result.data['duration'], file_size)
-                
-                queue: Queue = self.__get_queue_from_ctx()
-                position = await queue.add_entry(new_entry)
-                logger.info(f"[PLAY.TRANSACTION.SUCCESS] '{result.data['id']}' has been added to queue")
-                return await self.response_wrapper.whisper_to_author(f"[{position}] **{new_entry.title}** a été ajouté à la file d'attente\n{self.__get_processing_time()}")
+                return await self.__process_other_link(query)
 
                     
 
@@ -251,7 +233,7 @@ class PlayCmdProcessor():
     async def __retrieve_data_feedback(self, time_elapsed):
         await self.response_wrapper.append_to_last_whisper(f"-# En attente de la réponse de youtube...  {int(time_elapsed)} secondes", new_line=True, save_edit=False)
     
-    #end region
+    #endregion
 
 
 
@@ -447,7 +429,7 @@ class PlayCmdProcessor():
 
     
 
-    #region entry
+    #region Entry
 
     def __yt_prepare_video_entry(self, yt_video: youtube.YoutubeVideo) -> Entry:
         entry: Entry = Entry(yt_video.name, self.response_wrapper.author, yt_video.web_url)
@@ -891,4 +873,52 @@ class PlayCmdProcessor():
 
 
 
+    #endregion
+
+
+
+
+
+
+
+
+
+
+
+    #region Other Links
+    
+    async def __process_other_link(self, query):
+        logger.info(f"[QUERY.PROCESS.LINK] Begin process of link \"{query}\" (GID:{self.response_wrapper.guild_id})")
+        result: common.CommonResponseData = await youtube.YoutubeAPI.get_data_async(query, self.__retrieve_data_feedback)
+        if result.data is not None or len(result.data) > 0: # Supported by yt_dlp
+            return await self.__process_yt_dlp_supported(result, query)
+        if requests.head(query).headers["Content-Type"].startswith("audio"):
+            return await self.__process_file_url(query)
+        return await self.response_wrapper.whisper_to_author(":warning: Ce site n'est pas supporté ou ce lien ne contient pas de données audio")
+
+    async def __process_yt_dlp_supported(self, result: common.CommonResponseData, query: str):
+        new_entry: Entry = Entry(result.data['title'], self.response_wrapper.author, query)
+        success, filename = await youtube.YoutubeAPI.link_download(query, result.data)
+        if not success:
+            return await self.response_wrapper.whisper_to_author(":warning: Echec du téléchargement du fichier associé")
+        
+        if not os.path.isfile(config.downloadDirectory + filename):
+            logger.error("[YOUTUBE.DOWNLOAD.FILE_SIZE.ERROR] trying to find a file that doesn't exist")
+            return (False, f":warning: Erreur lors du téléchargement de {new_entry.title}")
+        
+        duration = get_file_duration(config.downloadDirectory + filename)
+        file_size = os.path.getsize(config.downloadDirectory + filename)
+        new_entry.map_to_file(filename, duration, file_size)
+        
+        queue: Queue = self.__get_queue_from_ctx()
+        position = await queue.add_entry(new_entry)
+        logger.info(f"[PLAY.TRANSACTION.SUCCESS] '{result.data['id']}' has been added to queue")
+        return await self.response_wrapper.whisper_to_author(f"[{position}] **{new_entry.title}** a été ajouté à la file d'attente\n{self.__get_processing_time()}")
+
+    async def __process_file_url(self, url: str):
+        new_entry = Entry(url, self.response_wrapper.author, url)
+        queue: Queue = self.__get_queue_from_ctx()
+        position = await queue.add_entry(new_entry)
+        return await self.response_wrapper.whisper_to_author(f"[{position}] **{new_entry.title}** a été ajouté à la file d'attente\n{self.__get_processing_time()}")
+    
     #endregion
