@@ -4,6 +4,8 @@ RUN apt-get -y update
 RUN apt-get -y upgrade
 RUN apt-get install -y --no-install-recommends ffmpeg
 
+COPY --from=denoland/deno:bin-2.6.7 /deno /usr/local/bin/deno
+
 RUN python -m pip install --upgrade pip
 
 COPY requirements.txt /app/
