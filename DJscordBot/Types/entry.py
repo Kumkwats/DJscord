@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import Enum
 
 import discord
@@ -6,8 +7,23 @@ import discord
 
 class EntryType(Enum):
     UNKNOWN = 0
-    FILE = 1
-    STREAM = 2
+    LOCAL_FILE = 1
+    REMOTE = 2
+
+
+@dataclass
+class EntryFileData:
+    filename: str
+    path: str
+
+    @property
+    def is_available(self):
+        if self.path.startswith(("http://", "https://", "udp://")):
+            pass
+        else:
+            pass
+
+
 
 
 class EntryPlaylist():
@@ -32,6 +48,7 @@ class Entry():
         self.title: str = title
         self.user: discord.User = user
         self.web_url: str = web_url
+
         self.is_ready = False
 
         self.playlist: EntryPlaylist = None
@@ -47,12 +64,13 @@ class Entry():
         self.size = 0
 
         # stream
-        self.stream_link: str = None
+        self.remote_url: str = None
 
-        self.is_saturated = False
-        self.is_reverse = False
+        self.is_saturated: bool = False
+        self.is_reverse: bool = False
 
-        
+        self.__is_boot_file: bool = False
+        self.__boot_file_path: str = ""
 
     def add_description(self, description):
         self.description = description
@@ -65,16 +83,16 @@ class Entry():
 
 
     def map_to_file(self, filename: str, duration = 0, file_size = 0):
-        self.type = EntryType.FILE
+        self.type = EntryType.LOCAL_FILE
         self.filename = filename
         self.duration = duration
         self.size = file_size
         self.is_ready = True
 
 
-    def map_to_stream(self, stream_url: str):
-        self.type = EntryType.STREAM
-        self.stream_link = stream_url
+    def map_to_remote(self, remote_url: str):
+        self.type = EntryType.REMOTE
+        self.remote_url = remote_url
         self.is_ready = True
 
     

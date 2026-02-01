@@ -887,14 +887,38 @@ class PlayCmdProcessor():
 
     #region Other Links
     
+
     async def __process_other_link(self, query):
+        #TODO make it global
+        REQUEST_HEAD_TIMEOUT = 10
+        PRINT_EXCEPTION_LIMIT = 30
+
         logger.info(f"[QUERY.PROCESS.LINK] Begin process of link \"{query}\" (GID:{self.response_wrapper.guild_id})")
+        try:
+            query_request = requests.head(query, timeout=REQUEST_HEAD_TIMEOUT)
+        except ConnectionError as err:
+            logger.error(f"[QUERY.PROCESS.LINK] A connection error occured while attempting to gather HTTP Headers at : ({query})\n{traceback.print_exception(err, limit=PRINT_EXCEPTION_LIMIT)}")
+            return await self.response_wrapper.whisper_to_author(":warning: Une erreur est survenue lors de la récupération des données de la requète")
+        except requests.Timeout as err:
+            logger.error(f"[QUERY.PROCESS.LINK] Request as timed-out while attempting to gather HTTP Headers at : ({query})\n{traceback.print_exception(err, limit=PRINT_EXCEPTION_LIMIT)}")
+            return await self.response_wrapper.whisper_to_author(":warning: Le site n'a pas pu donner une réponse à temps")
+        if query_request.headers["Content-Type"].startswith("audio"):
+            return await self.__process_audio_content_url(query)
+
+
         result: common.CommonResponseData = await youtube.YoutubeAPI.get_data_async(query, self.__retrieve_data_feedback)
         if result.data is not None or len(result.data) > 0: # Supported by yt_dlp
             return await self.__process_yt_dlp_supported(result, query)
-        if requests.head(query).headers["Content-Type"].startswith("audio"):
-            return await self.__process_file_url(query)
         return await self.response_wrapper.whisper_to_author(":warning: Ce site n'est pas supporté ou ce lien ne contient pas de données audio")
+
+
+    async def __process_audio_content_url(self, url: str):
+        new_entry = Entry(url, self.response_wrapper.author, url)
+        new_entry.map_to_remote(url)
+        queue: Queue = self.__get_queue_from_ctx()
+        position = await queue.add_entry(new_entry)
+        return await self.response_wrapper.whisper_to_author(f"[{position}] **{new_entry.title}** a été ajouté à la file d'attente\n{self.__get_processing_time()}")
+
 
     async def __process_yt_dlp_supported(self, result: common.CommonResponseData, query: str):
         new_entry: Entry = Entry(result.data['title'], self.response_wrapper.author, query)
@@ -915,10 +939,7 @@ class PlayCmdProcessor():
         logger.info(f"[PLAY.TRANSACTION.SUCCESS] '{result.data['id']}' has been added to queue")
         return await self.response_wrapper.whisper_to_author(f"[{position}] **{new_entry.title}** a été ajouté à la file d'attente\n{self.__get_processing_time()}")
 
-    async def __process_file_url(self, url: str):
-        new_entry = Entry(url, self.response_wrapper.author, url)
-        queue: Queue = self.__get_queue_from_ctx()
-        position = await queue.add_entry(new_entry)
-        return await self.response_wrapper.whisper_to_author(f"[{position}] **{new_entry.title}** a été ajouté à la file d'attente\n{self.__get_processing_time()}")
+
+    
     
     #endregion

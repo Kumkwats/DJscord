@@ -12,7 +12,7 @@ from ..client import DJscordClient
 from ..utils.format import time_format
 from ..utils.io import pick_sound_file
 
-from .entry import Entry
+from .entry import Entry, EntryType
 from .enums import RepeatMode, AfterEntryPlaybackAction
 
 
@@ -202,6 +202,8 @@ class Queue():
                 new_entry.add_image("https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/3ddaa372-c58c-4587-911e-1d625dff64dc/dapv26n-b138c16c-1cfc-45c3-9989-26fcd75d3060.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvM2RkYWEzNzItYzU4Yy00NTg3LTkxMWUtMWQ2MjVkZmY2NGRjXC9kYXB2MjZuLWIxMzhjMTZjLTFjZmMtNDVjMy05OTg5LTI2ZmNkNzVkMzA2MC5qcGcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.PnU42OFMHcio7nJ4a5Jsp8C-d6exHqd3vInU1682x1E")
                 new_entry.add_description("Chaîne : [DJPatrice](https://github.com/Kumkwats/DJscord)")
                 new_entry.map_to_file(file)
+                new_entry.__is_boot_file = True
+                new_entry.__boot_file_path = file
                 print(f"[QUEUE.STARTUP] Startup file added to queue")
                 return new_entry
             else:
@@ -224,14 +226,28 @@ class Queue():
 
 
         entry: Entry = self.entries[self.cursor]
-        if entry.size != 0:
-            filename: str = config.downloadDirectory + entry.filename
-            if not os.path.exists(filename):
-                print("[PLAYBACK.START.ERROR] Attempting to play a file that doesn't exist !")
-                await self.text_channel.send(f"Le Didjé a paumé le fichier de **{entry.title}**, on passe à la suivante du coup...")
+        match entry.type:
+
+            case EntryType.LOCAL_FILE:
+                if entry.__is_boot_file:
+                    file_path: str = entry.__boot_file_path
+                else:
+                    file_path: str = config.downloadDirectory + entry.filename
+                if not os.path.exists(file_path):
+                    print("[PLAYBACK.START.ERROR] Attempting to play a file that doesn't exist !")
+                    self.dont_update_cursor_position = True
+                    self.remove_entry(self.cursor)
+                    await self.text_channel.send(f"Le Didjé a paumé le fichier de **{entry.title}**, on passe à la suivante du coup...")
+                    self.__on_after_play()
+
+            case EntryType.REMOTE:
+                file_path: str = entry.remote_url
+
+            case _:
+                self.dont_update_cursor_position = True
+                self.remove_entry(self.cursor)
+                await self.text_channel.send(f"J'ai trouvé une entrée bizarre et je sais pas quoi faire avec... bref, on passe à la suivante !")
                 self.__on_after_play()
-        else:
-            filename: str = entry.filename
         
         
         
@@ -258,7 +274,7 @@ class Queue():
                 contains_filters = True
 
         player: discord.FFmpegOpusAudio = discord.FFmpegOpusAudio(
-            filename,
+            file_path,
             before_options = before,
             options = f"-vn {custom_options}")
         
