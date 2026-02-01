@@ -18,6 +18,9 @@ from ..utils.io import pick_sound_file
 
 from .processors.cmd_music_play import PlayCmdProcessor
 
+from ..logging.utils import get_logger
+logger = get_logger("djscordbot.commands.music")
+
 
 VOICE_ACTIVITY_CHECK_DELTA = 10 #number of seconds between every AFK check
 
@@ -38,7 +41,7 @@ class Music():
     @staticmethod
     def author_voice_is_connected(interac_wrapper: InteractionWrapper) -> bool:
         if interac_wrapper.author.voice is None: # Not connected
-            print(f"[CONNECT.ERROR] no author_voice, cannot connect (GID:{interac_wrapper.guild.id})")
+            logger.error(f"[CONNECT] no author_voice, cannot connect (GID:{interac_wrapper.guild.id})")
             return False
         return True
 
@@ -59,7 +62,7 @@ class Music():
         guild_id = interac_wrapper.guild.id
 
         if not self.author_voice_is_connected(interac_wrapper): # Not connected
-            print(f"[CONNECT.ERROR] no author_voice, cannot connect (GID:{guild_id})")
+            logger.error(f"[AUTHOR_VOICE] no author_voice, cannot connect (GID:{guild_id})")
             return await interac_wrapper.respond(
                 "Vous devez être connecté à un salon vocal pour pouvoir ajouter de la musique",
                 ephemeral=True)
@@ -72,15 +75,15 @@ class Music():
         queue: Queue = QueueManager.get_queue(guild_id)
         if queue is None:
             new_voice_client: discord.VoiceClient = None
-            print(f"[QUEUE.NEW.CONNECT.VC] New queue, attempting connection... (GID:{guild_id})")
+            logger.debug(f"[VOICE.CONNECT] New queue, attempting connection... (GID:{guild_id})")
             try:
                 new_voice_client = await interac_wrapper.author.voice.channel.connect(timeout=60)
             except discord.ClientException as cEx:
-                print(f"[CONNECT.VC.EXCEPTION] unable to connect to VC:\n{cEx}")
+                logger.error(f"[VOICE.CONNECT] unable to connect to VC (GID:{guild_id}):\n{cEx}")
                 return await interac_wrapper.whisper_to_author("Une erreur est survenue lors de la connection au channel vocal")
 
             if new_voice_client is None:
-                print(f"[CONNECT.VC.EXCEPTION] VC is None")
+                logger.error(f"[VOICE.CONNECT] VC is None (GID:{guild_id})")
 
             queue = await QueueManager.create_queue(guild_id, new_voice_client, interac_wrapper.interaction.channel, self.bot)
 
@@ -88,29 +91,24 @@ class Music():
 
         #Existing queue checks
         else:
-            print(f"[QUEUE] existing queue, checking voice status (GID:{guild_id})")
+            logger.debug(f"[VOICE.EXISTING] existing queue, checking voice status (GID:{guild_id})")
             if not queue.is_connected:
-                print(f"[VOICE.STATUS] voice client not connected, reconnecting (GID:{guild_id})")
+                logger.info(f"[VOICE.STATUS] voice client not connected, reconnecting (GID:{guild_id})")
                 try:
                     await queue.connect(interac_wrapper.author.voice.channel)
                 except discord.ClientException as cEx:
-                    print(f"[CONNECT.ERROR] unable to connect to VC:\n{cEx}")
+                    logger.error(f"[VOICE.RECONNECT] unable to connect to VC:\n{cEx}")
                 if queue.is_connected:
-                    print(f"[VOICE.SUCCESS] voice client reconnected (GID:{guild_id})")
+                    logger.info(f"[VOICE.RECONNECT] voice client reconnected (GID:{guild_id})")
                 else:
-                    print(f"[VOICE.ERROR] voice client unable to reconnect, aborting and removing guild (GID:{guild_id})")
+                    logger.error(f"[VOICE.RECONNECT] voice client unable to reconnect, aborting and removing guild (GID:{guild_id})")
                     QueueManager.remove_queue(guild_id)
                     return await interac_wrapper.respond("Une erreur est survenu, je n'ai pas réussi à me reconnecter... veuillez réessayer ultérieurement")
                     
             voice_channel_queue = queue.voice_channel
             if voice_channel_queue is not None and interac_wrapper.author.voice.channel != voice_channel_queue:
                 await queue.move(interac_wrapper.author.voice.channel)
-                print(f"[QUEUE.UPDATE.USER_HAS_MOVED] moved to new channel : {interac_wrapper.author.voice.channel} (GID:{guild_id})")
-        
-        # print("Guild (%d): Connected to %s (number of members: %d)" % (guild, Queues[guild].voice_client.channel.name, len(Queues[guild].voice_client.channel.members)))
-
-        #new_entry: Entry = None
-        
+                logger.info(f"[VOICE.UPDATE.MOVED] moved to new channel : {interac_wrapper.author.voice.channel} (GID:{guild_id})")
 
 
         play_cmd_transaction: PlayCmdProcessor = PlayCmdProcessor(interac_wrapper, self.bot)
@@ -169,12 +167,12 @@ class Music():
             if queue.is_playing:
                 queue.pause()
                 queue.pausetime = time.time()
-                print(f"[MUSIC.PAUSE] paused listening (GID:{queue.guild_id})")
+                logger.info(f"[PAUSE] paused player (GID:{queue.guild_id})")
                 return await interac_wrapper.respond("Lecture mise en pause")
             else:
                 return await interac_wrapper.respond("Lecture déjà en pause !", ephemeral=True)
         else:
-            print(f"[MUSIC.PAUSE.ERROR] pause() called but not in the registered guilds (GID:{queue.guild_id})")
+            logger.error(f"[PAUSE] pause() called but not in the registered guilds (GID:{queue.guild_id})")
             return await interac_wrapper.respond("Selon les informations que je possède, il n'y a aucune lecture en cours sur ce serveur", ephemeral=True)
 
 
@@ -185,12 +183,12 @@ class Music():
                 queue.resume()
                 queue.starttime = time.time() - (queue.pausetime - queue.starttime) # Setting starttime to the correct time to ensure that the time elapsed on the entry is correct when resuming
                 queue.pausetime = 0
-                print(f"[MUSIC.RESUME] resumed listening (GID:{queue.guild_id})")
+                logger.info(f"[RESUME] resumed player (GID:{queue.guild_id})")
                 return await interac_wrapper.respond("Reprise de la lecture")
             else:
                 return await interac_wrapper.respond("On est déjà en lecture !", ephemeral=True)
         else:
-            print(f"[MUSIC.RESUME.ERROR] resume() called but not in the registered guilds (GID:{queue.guild_id})")
+            logger.error(f"[RESUME] resume() called but not in the registered guilds (GID:{queue.guild_id})")
             return await interac_wrapper.respond("Selon les informations que je possède, il n'y a aucune lecture en cours sur ce serveur", ephemeral=True)
 
     
@@ -204,10 +202,10 @@ class Music():
                 queue.next_entry_condition = AfterEntryPlaybackAction.STOP
                 queue.dont_update_cursor_position = True
                 queue.stop()
-                print(f"[MUSIC.STOP] stopped listening (GID:{queue.guild_id})")
+                logger.info(f"[STOP] stopped listening (GID:{queue.guild_id})")
                 return await interac_wrapper.respond("Ok j'arrête de lire la musique :(")
         else:
-            print(f"[MUSIC.STOP.ERROR] stop() called but not in the registered guilds (GID:{queue.guild_id})")
+            logger.error(f"[STOP] stop() called but not in the registered guilds (GID:{queue.guild_id})")
             return await interac_wrapper.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
 
 #endregion
@@ -404,7 +402,7 @@ class Music():
             # remove associated file
             if entry.filename in os.listdir(config.downloadDirectory):
                 os.remove(config.downloadDirectory + entry.filename)
-            print(f"[MUSIC.REMOVE] Entry number {idx1} has been removed (GID:{queue.guild_id})")
+            logger.info(f"[REMOVE] Entry number {idx1} has been removed (GID:{queue.guild_id})")
             return await interac_wrapper.respond(f"{entry.title} a bien été supprimé")
         
         else: # remove multiple entries
@@ -429,7 +427,7 @@ class Music():
                     os.remove(config.downloadDirectory + entry.filename)
 
             
-            print(f"[MUSIC.REMOVE] Entries in range ({idx1} - {idx2}) have been removed (GID:{queue.guild_id})")
+            logger.info(f"[REMOVE] Entries in range ({idx1} - {idx2}) have been removed (GID:{queue.guild_id})")
             return await interac_wrapper.respond(f"Les entrées commençant à {idx1} jusqu'à {('la fin de la liste' if idx2 == oldSize else str(idx2))} ont bien été supprimés")
         
 
@@ -466,32 +464,30 @@ class Music():
             if voice_client is not None:
                 await voice_client.disconnect()
                 voice_client.cleanup()
-                print(f"[MUSIC.LEAVE] Disconnected lone voice_client (GID:{guild_id})")
+                logger.warning(f"[LEAVE] Disconnected lone voice_client (GID:{guild_id})")
                 return await interac_wrapper.respond('Ok bye!')
             else:
-                print(f"[MUSIC.LEAVE.ERROR] leave() called but not in the registered guilds (GID:{guild_id})")
+                logger.error(f"[LEAVE] leave() called but not in the registered guilds (GID:{guild_id})")
                 return await interac_wrapper.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
-        
+
 
         if guild_queue.is_playing and (interac_wrapper.author.voice is None or interac_wrapper.author.voice.channel != guild_queue.voice_channel):
             return await interac_wrapper.respond("Je suis en train de jouer de la musique là, viens me le dire en face !", ephemeral=True)
         guild_queue.next_entry_condition = AfterEntryPlaybackAction.STOP
         guild_queue.stop()
         await guild_queue.disconnect_and_cleanup()
-        print(f"[MUSIC.LEAVE] Disconnected voice_client (GID:{guild_id})")
+        logger.info(f"[MUSIC.LEAVE] Disconnected voice_client (GID:{guild_id})")
         await asyncio.sleep(0.2)
         for entry in guild_queue.entries:
             if entry.filename in os.listdir(config.downloadDirectory):
                 try:
                     os.remove(config.downloadDirectory + entry.filename) # If running on Windows), the file currently playing will not be erased
                 except:
-                    print(f"[MUSIC.LEAVE.CLEANUP.ERROR] error while removing file \"{entry.filename}\" (GID:{guild_id})")
+                    logger.error(f"[LEAVE.CLEANUP] error while removing file \"{entry.filename}\" (GID:{guild_id})")
                     continue
         await QueueManager.remove_queue(guild_id)
         return await interac_wrapper.respond('Ok bye!')
-        # else:
-        #     print(f"[MUSIC.LEAVE.ERROR] leave() called but voice client is None (GID:{guild_id})")
-        #     return await ctx.respond("Selon les informations que je possède, je suis pas connecté sur ce serveur.", ephemeral=True)
+
 
     #TODO ERROR command not found
     async def repeat(self, interac_wrapper: InteractionWrapper, mode: RepeatMode):
@@ -535,7 +531,7 @@ class Music():
             return await interac_wrapper.respond("Aucune liste de lecture", ephemeral=True)
         
         if not queue.has_voice_client:
-            print("[MUSIC.GOTO.ERROR] guild(%d) has no VoiceClient")
+            logger.error("[GOTO] guild(%d) has no VoiceClient")
             #TODO Handle queue tests (maybe in a separate method)
             return await interac_wrapper.respond(":warning: Une erreur est survenue lors de la commande", ephemeral=True)
 
@@ -578,14 +574,14 @@ class Music():
             guild_queue = QueueManager.get_queue(guild_id)
             if guild_queue.__voice_client is None:
                 guilds_to_disconnect.append(guild_id)
-                print(f"Timeout: [INFO] Guild ({guild_queue}) has no voice_client, will be removed")
+                logger.info(f"[TIMEOUT] Guild ({guild_queue}) has no voice_client, will be removed")
             else:
                 if guild_queue.is_playing:
                     guild_queue.update_last_voice_activity()
                 else:
                     if time.time() - guild_queue.last_voice_activity_time >= config.leave_afk_time*60:
                         guilds_to_disconnect.append(guild_id)
-                        print(f"Timeout: [INFO] Guild ({guild_id}) has been inactive for too long, will be removed (AFK time = {time.time() - guild_queue.last_voice_activity_time} seconds)")
+                        logger.info(f"[TIMEOUT] Guild ({guild_id}) has been inactive for too long, will be removed (AFK time = {time.time() - guild_queue.last_voice_activity_time} seconds)")
                         
         
         if len(guilds_to_disconnect) > 0:
@@ -598,15 +594,15 @@ class Music():
                             player = discord.FFmpegPCMAudio(file, options="-vn")
                             guild_to_disconnect.__voice_client.play(player, after=lambda e: guild_to_disconnect.__voice_client.loop.create_task(QueueManager.remove_queue(guild_id)))
                     else:
-                        print("Timeout: No file in Leave folder")
+                        logger.debug("[TIMEOUT] no leaving sounds found")
                 else:
-                    print("PickSound: dossier Sounds inexistant")
+                    logger.debug("[TIMEOUT] sounds folder not found")
                     
                 while guild_to_disconnect.__voice_client.is_playing():
                     await asyncio.sleep(0.1)
 
                 await guild_to_disconnect.disconnect_and_cleanup()
                 await QueueManager.remove_queue(guild_id)
-                print(f"Guild ({guild_queue}): Disconnected for inactivity")
+                logger.info(f"[TIMEOUT]Disconnected for inactivity GID({guild_queue})")
 
 #endregion

@@ -15,7 +15,8 @@ from ..utils.io import pick_sound_file
 from .entry import Entry, EntryType
 from .enums import RepeatMode, AfterEntryPlaybackAction
 
-
+from ..logging.utils import get_logger
+logger = get_logger("djscordbot.queue")
 
 
 
@@ -82,7 +83,7 @@ class Queue():
     @property
     def voice_channel(self) -> discord.VoiceChannel:
         if not self.has_voice_client:
-            print("[Queue.Get_Voice_Channel] voice_client is None")
+            logger.error(f"[GET_VOICE_CHANNEL] voice_client is None (GID:{self.guild_id})")
             return None
         return self.__voice_client.channel
     #endregion
@@ -92,21 +93,21 @@ class Queue():
     @property
     def is_connected(self) -> bool:
         if not self.has_voice_client:
-            print("[Queue.Is_Connected] voice_client is None")
+            logger.error(f"[IS_CONNECTED] voice_client is None (GID:{self.guild_id})")
             return False
         return self.__voice_client.is_connected()
 
     @property
     def is_playing(self) -> bool:
         if not self.has_voice_client:
-            print("[Queue.Is_Playing] voice_client is None")
+            logger.error(f"[IS_PLAYING] voice_client is None (GID:{self.guild_id})")
             return False
         return self.__voice_client.is_playing()
     
     @property
     def is_paused(self) -> bool:
         if not self.has_voice_client:
-            print("[Queue.Is_Paused] voice_client is None")
+            logger.error(f"[IS_PAUSED] voice_client is None (GID:{self.guild_id})")
             return False
         return self.__voice_client.is_paused()
     
@@ -118,13 +119,13 @@ class Queue():
     #region voice client functions
     def pause(self):
         if not self.has_voice_client:
-            print("[Queue.Pause] voice_client is None")
+            logger.error(f"[PAUSE] voice_client is None (GID:{self.guild_id})")
             return
         self.__voice_client.pause()
 
     def resume(self):
         if not self.has_voice_client:
-            print("[Queue.Resume] voice_client is None")
+            logger.error(f"[RESUME] voice_client is None (GID:{self.guild_id})")
             return
         self.__voice_client.resume()
 
@@ -132,7 +133,7 @@ class Queue():
     #- Stop doesn't really stop
     def stop(self):
         if not self.has_voice_client:
-            print("[Queue.Stop] voice_client is None")
+            logger.error(f"[STOP] voice_client is None (GID:{self.guild_id})")
             return
         self.__voice_client.stop()
 
@@ -204,12 +205,12 @@ class Queue():
                 new_entry.map_to_file(file)
                 new_entry.__is_boot_file = True
                 new_entry.__boot_file_path = file
-                print(f"[QUEUE.STARTUP] Startup file added to queue")
+                logger.debug(f"[STARTUP] startup file added to queue")
                 return new_entry
             else:
-                print(f"[QUEUE.STARTUP] Aucun fichier trouvé")
+                logger.debug(f"[STARTUP] no startup file found")
         else:
-            print(f"[QUEUE.STARTUP] Dossier Sounds inexistant")
+            logger.debug(f"[STARTUP] sounds folder not found")
 
 ##warning  FFMPEG args for multiple stream at different time : https://stackoverflow.com/questions/37297856/ffmpeg-combine-video-files-with-different-start-times
 
@@ -217,11 +218,11 @@ class Queue():
     #Playback
     async def start_playback(self, timestart: int = 0, supress_output: bool = False):
         if not self.is_connected:
-            print("[PLAYBACK.START.ERROR] Voice client is not connected, cannot start playback !")
+            logger.error(f"[PLAYBACK.START] Voice client is not connected, cannot start playback! (GID:{self.guild_id})")
             return await self.text_channel.send(f"Le Didjé a essayé de lancer une musique alors qu'il est apparemment pas connecté")
 
         if self.is_playing:
-            print("[PLAYBACK.START.ERROR] Voice client is already, we won't start another playback !")
+            logger.error(f"[PLAYBACK.START] Voice client is already, we won't start another playback! (GID:{self.guild_id})")
             return await self.text_channel.send(f"Le Didjé a essayé de lancer une musique alors qu'une autre est en cours")
 
 
@@ -234,7 +235,7 @@ class Queue():
                 else:
                     file_path: str = config.downloadDirectory + entry.filename
                 if not os.path.exists(file_path):
-                    print("[PLAYBACK.START.ERROR] Attempting to play a file that doesn't exist !")
+                    logger.error("[PLAYBACK.START] Attempting to play a file that doesn't exist !")
                     self.dont_update_cursor_position = True
                     self.remove_entry(self.cursor)
                     await self.text_channel.send(f"Le Didjé a paumé le fichier de **{entry.title}**, on passe à la suivante du coup...")
@@ -244,6 +245,7 @@ class Queue():
                 file_path: str = entry.remote_url
 
             case _:
+                logger.error(f"[PLAYBACK.START] Attempting to play an unknown entry file that doesn't exist ! (GID:{self.guild_id})")
                 self.dont_update_cursor_position = True
                 self.remove_entry(self.cursor)
                 await self.text_channel.send(f"J'ai trouvé une entrée bizarre et je sais pas quoi faire avec... bref, on passe à la suivante !")
@@ -293,20 +295,20 @@ class Queue():
 
     def __on_after_play(self):
         if self.next_entry_condition is AfterEntryPlaybackAction.SEEK:
-            print(f"[QUEUE.AFTER_PLAY] on_after_play >> seek (GID:{self.guild_id})")
+            logger.debug(f"[QUEUE.AFTER_PLAY] on_after_play >> seek (GID:{self.guild_id})")
             return self.__play_seek()
         
         elif self.next_entry_condition is AfterEntryPlaybackAction.STOP:
             if not self.dont_update_cursor_position:
                 self.__update_cursor_for_next_entry()
 
-            print(f"[QUEUE.AFTER_PLAY] on_after_play >> stop (GID:{self.guild_id})")
+            logger.debug(f"[QUEUE.AFTER_PLAY] on_after_play >> stop (GID:{self.guild_id})")
             self.__stop_reset_play_status()
             return
         # elif self.next_entry_condition is NextEntryCondition.RESUME:
         #     pass
         
-        print(f"[QUEUE.AFTER_PLAY] on_after_play >> next entry (GID:{self.guild_id})")
+        logger.debug(f"[QUEUE.AFTER_PLAY] on_after_play >> next entry (GID:{self.guild_id})")
         self.__play_next()
 
         self.next_entry_condition = AfterEntryPlaybackAction.DEFAULT
@@ -365,9 +367,9 @@ class Queue():
             try:
                 fut.result()
             except Exception:
-                print(f"[ERROR] play_next(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
+                logger.critical(f"[ERROR] play_next(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
         else:
-            print("[PLAYBACK.PLAY_NEXT] End of queue")
+            logger.debug(f"[PLAYBACK.PLAY_NEXT] End of queue (GID:{self.guild_id})")
             self.__stop_reset_play_status()
             
 
@@ -387,9 +389,9 @@ class Queue():
             try:
                 fut.result()
             except Exception:
-                print(f"[ERROR] play_seek(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
+                logger.critical(f"[ERROR] play_seek(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
         else:
-            print("[PLAYBACK.PLAY_NEXT] Attempted seek at queue but it's at the end, ignoring...")
+            logger.debug(f"[PLAYBACK.PLAY_NEXT] Attempted seek at queue but it's at the end, ignoring... (GID:{self.guild_id})")
             self.__stop_reset_play_status()
 
 
@@ -399,7 +401,7 @@ class Queue():
         self.next_entry_condition = AfterEntryPlaybackAction.DEFAULT
         self.seek_time = -1
         self.dont_update_cursor_position = False
-        print("[PLAYBACK.STOP] playback stopped, and setting status to stopped")
+        logger.debug("[PLAYBACK.STOP] playback stopped, and setting status to stopped")
 
 
     async def add_entry(self, entry: Entry, position: int = None) -> int:
