@@ -69,8 +69,8 @@ class Entry():
         self.is_saturated: bool = False
         self.is_reverse: bool = False
 
-        self.__is_boot_file: bool = False
-        self.__boot_file_path: str = ""
+        self._is_boot_file: bool = False
+        self._boot_file_path: str = ""
 
     def add_description(self, description):
         self.description = description

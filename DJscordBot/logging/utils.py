@@ -3,7 +3,6 @@ from typing import Any
 import logging
 
 
-
 def is_docker() -> bool:
     path = '/proc/self/cgroup'
     return os.path.exists('/.dockerenv') or (os.path.isfile(path) and any('docker' in line for line in open(path)))
@@ -76,8 +75,7 @@ class _ColourFormatter(logging.Formatter):
 
 
 
-
-default_log_value = logging.DEBUG
+default_log_value = logging.INFO
 
 def get_logger(log_name = None, log_level: int = default_log_value, is_root: bool = False) -> logging.Logger:
     """
