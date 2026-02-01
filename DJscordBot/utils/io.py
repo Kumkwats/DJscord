@@ -5,12 +5,15 @@ import subprocess
 
 from ..config import config
 
+from ..logging.utils import get_logger
+logger = get_logger("djscordbot.utils.io")
+
 
 def pick_sound_file(folder_name: str) -> tuple[bool, str]:
     folder_path = config.soundDirectory + folder_name
     if os.path.isdir(folder_path):
         file_list = os.listdir(folder_path)
-        print(f"[DEBUG] file_list : {file_list}")
+        logger.debug(f"[PICK_SOUND] Folder '{folder_name}', file_list : {file_list}")
         if len(file_list) > 0:
             rnd = random.randint(0, len(file_list)-1)
             full_path = os.path.join(folder_path, file_list[rnd])
