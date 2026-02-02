@@ -45,7 +45,7 @@ class QueueManager():
 
 
     @classmethod
-    async def remove_queue(cls, guild_id: int) -> bool:
+    async def remove_queue(cls, guild_id: int):
         if guild_id not in cls.__queues:
             logger.error(f"[REMOVE] guild({guild_id}) already removed")
             return
@@ -65,7 +65,7 @@ class QueueManager():
         await asyncio.sleep(0.6)
         
         # Disconnect
-        await cls.__queues[guild_id].disconnect_and_cleanup()
+        await cls.__queues[guild_id].disconnect()
         logger.debug(f"[REMOVE] Disconnected in Guild({guild_id})")
 
         await asyncio.sleep(0.2)

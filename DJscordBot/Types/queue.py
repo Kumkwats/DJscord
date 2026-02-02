@@ -141,22 +141,27 @@ class Queue():
 
 
     async def connect(self, voice_channel: discord.VoiceChannel):
-        if self.__voice_client is None:
-            self.__voice_client = await voice_channel.connect(timeout=60)
-        else:
-            self.__voice_client = await voice_channel.connect(timeout=60, cls=self.__voice_client)
+        self.__voice_client = await voice_channel.connect(timeout=60)
 
-    async def reconnect(self) -> bool:
-        if self.__voice_client is None:
-            return False
-        self.__voice_client = await self.__voice_client.channel.connect(timeout=60, cls=self.__voice_client)
-        return True
+    # async def reconnect(self) -> bool:
+    #     if self.__voice_client is None:
+    #         logger.error(f"[QUEUE.RECONNECT] Cannot reconnect because voice client is None (GID:{self.guild_id})\n\tException: '{toErr}'")
+    #         return False
+    #     try:
+    #         self.__voice_client = await self.__voice_client.channel.connect(timeout=60)
+    #     except asyncio.TimeoutError as toErr:
+    #         logger.error(f"[QUEUE.RECONNECT.TIMEOUT] connect timed out... (GID:{self.guild_id})\n\tException: '{toErr}'")
+    #         return False
+    #     except discord.ClientException as cEx:
+    #         logger.error(f"[QUEUE.RECONNECT.CLIENT] unable to connect to VC because it is already connected to a voice client... (GID:{self.guild_id})")
+    #         return False
+    #     return True
 
 
     async def move(self, new_voice_channel: discord.VoiceChannel):
-        await self.__voice_client.move_to(new_voice_channel)
+        await self.__voice_client.move_to(new_voice_channel, timeout=60)
 
-    async def disconnect_and_cleanup(self):
+    async def disconnect(self):
         await self.__voice_client.disconnect()
         self.__voice_client.cleanup()
     #endregion
