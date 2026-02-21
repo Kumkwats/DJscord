@@ -29,7 +29,7 @@ def __download_folder_cleanup():
     if len(dl_files) > 0:
         for file in dl_files:
             full_path_file = DOWNLOAD_FOLDER_PATH + file
-            os.remove(file)
+            os.remove(full_path_file)
             __logger.debug(f"DOWNLOAD CLEANUP: removed file \'{file}\'")
 
 
