@@ -12,10 +12,11 @@ from ..client import DJscordClient
 from ..utils.format import time_format
 from ..utils.io import pick_sound_file
 
-from .entry import Entry
+from .entry import Entry, EntryType
 from .enums import RepeatMode, AfterEntryPlaybackAction
 
-
+from ..logging.utils import get_logger
+logger = get_logger("djscordbot.queue")
 
 
 
@@ -82,7 +83,7 @@ class Queue():
     @property
     def voice_channel(self) -> discord.VoiceChannel:
         if not self.has_voice_client:
-            print("[Queue.Get_Voice_Channel] voice_client is None")
+            logger.error(f"[GET_VOICE_CHANNEL] voice_client is None (GID:{self.guild_id})")
             return None
         return self.__voice_client.channel
     #endregion
@@ -92,21 +93,21 @@ class Queue():
     @property
     def is_connected(self) -> bool:
         if not self.has_voice_client:
-            print("[Queue.Is_Connected] voice_client is None")
+            logger.error(f"[IS_CONNECTED] voice_client is None (GID:{self.guild_id})")
             return False
         return self.__voice_client.is_connected()
 
     @property
     def is_playing(self) -> bool:
         if not self.has_voice_client:
-            print("[Queue.Is_Playing] voice_client is None")
+            logger.error(f"[IS_PLAYING] voice_client is None (GID:{self.guild_id})")
             return False
         return self.__voice_client.is_playing()
     
     @property
     def is_paused(self) -> bool:
         if not self.has_voice_client:
-            print("[Queue.Is_Paused] voice_client is None")
+            logger.error(f"[IS_PAUSED] voice_client is None (GID:{self.guild_id})")
             return False
         return self.__voice_client.is_paused()
     
@@ -118,13 +119,13 @@ class Queue():
     #region voice client functions
     def pause(self):
         if not self.has_voice_client:
-            print("[Queue.Pause] voice_client is None")
+            logger.error(f"[PAUSE] voice_client is None (GID:{self.guild_id})")
             return
         self.__voice_client.pause()
 
     def resume(self):
         if not self.has_voice_client:
-            print("[Queue.Resume] voice_client is None")
+            logger.error(f"[RESUME] voice_client is None (GID:{self.guild_id})")
             return
         self.__voice_client.resume()
 
@@ -132,30 +133,35 @@ class Queue():
     #- Stop doesn't really stop
     def stop(self):
         if not self.has_voice_client:
-            print("[Queue.Stop] voice_client is None")
+            logger.error(f"[STOP] voice_client is None (GID:{self.guild_id})")
             return
         self.__voice_client.stop()
 
 
 
-
+    #TODO add move on ClientException
     async def connect(self, voice_channel: discord.VoiceChannel):
-        if self.__voice_client is None:
-            self.__voice_client = await voice_channel.connect(timeout=60)
-        else:
-            self.__voice_client = await voice_channel.connect(timeout=60, cls=self.__voice_client)
+        self.__voice_client = await voice_channel.connect(timeout=60)
 
-    async def reconnect(self) -> bool:
-        if self.__voice_client is None:
-            return False
-        self.__voice_client = await self.__voice_client.channel.connect(timeout=60, cls=self.__voice_client)
-        return True
+    # async def reconnect(self) -> bool:
+    #     if self.__voice_client is None:
+    #         logger.error(f"[QUEUE.RECONNECT] Cannot reconnect because voice client is None (GID:{self.guild_id})\n\tException: '{toErr}'")
+    #         return False
+    #     try:
+    #         self.__voice_client = await self.__voice_client.channel.connect(timeout=60)
+    #     except asyncio.TimeoutError as toErr:
+    #         logger.error(f"[QUEUE.RECONNECT.TIMEOUT] connect timed out... (GID:{self.guild_id})\n\tException: '{toErr}'")
+    #         return False
+    #     except discord.ClientException as cEx:
+    #         logger.error(f"[QUEUE.RECONNECT.CLIENT] unable to connect to VC because it is already connected to a voice client... (GID:{self.guild_id})")
+    #         return False
+    #     return True
 
 
     async def move(self, new_voice_channel: discord.VoiceChannel):
-        await self.__voice_client.move_to(new_voice_channel)
+        await self.__voice_client.move_to(new_voice_channel, timeout=60)
 
-    async def disconnect_and_cleanup(self):
+    async def disconnect(self):
         await self.__voice_client.disconnect()
         self.__voice_client.cleanup()
     #endregion
@@ -202,12 +208,14 @@ class Queue():
                 new_entry.add_image("https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/3ddaa372-c58c-4587-911e-1d625dff64dc/dapv26n-b138c16c-1cfc-45c3-9989-26fcd75d3060.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvM2RkYWEzNzItYzU4Yy00NTg3LTkxMWUtMWQ2MjVkZmY2NGRjXC9kYXB2MjZuLWIxMzhjMTZjLTFjZmMtNDVjMy05OTg5LTI2ZmNkNzVkMzA2MC5qcGcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.PnU42OFMHcio7nJ4a5Jsp8C-d6exHqd3vInU1682x1E")
                 new_entry.add_description("Chaîne : [DJPatrice](https://github.com/Kumkwats/DJscord)")
                 new_entry.map_to_file(file)
-                print(f"[QUEUE.STARTUP] Startup file added to queue")
+                new_entry._is_boot_file = True
+                new_entry._boot_file_path = file
+                logger.debug(f"[STARTUP] startup file added to queue")
                 return new_entry
             else:
-                print(f"[QUEUE.STARTUP] Aucun fichier trouvé")
+                logger.debug(f"[STARTUP] no startup file found")
         else:
-            print(f"[QUEUE.STARTUP] Dossier Sounds inexistant")
+            logger.debug(f"[STARTUP] sounds folder not found")
 
 ##warning  FFMPEG args for multiple stream at different time : https://stackoverflow.com/questions/37297856/ffmpeg-combine-video-files-with-different-start-times
 
@@ -215,23 +223,38 @@ class Queue():
     #Playback
     async def start_playback(self, timestart: int = 0, supress_output: bool = False):
         if not self.is_connected:
-            print("[PLAYBACK.START.ERROR] Voice client is not connected, cannot start playback !")
+            logger.error(f"[PLAYBACK.START] Voice client is not connected, cannot start playback! (GID:{self.guild_id})")
             return await self.text_channel.send(f"Le Didjé a essayé de lancer une musique alors qu'il est apparemment pas connecté")
 
         if self.is_playing:
-            print("[PLAYBACK.START.ERROR] Voice client is already, we won't start another playback !")
+            logger.error(f"[PLAYBACK.START] Voice client is already, we won't start another playback! (GID:{self.guild_id})")
             return await self.text_channel.send(f"Le Didjé a essayé de lancer une musique alors qu'une autre est en cours")
 
 
         entry: Entry = self.entries[self.cursor]
-        if entry.size != 0:
-            filename: str = config.downloadDirectory + entry.filename
-            if not os.path.exists(filename):
-                print("[PLAYBACK.START.ERROR] Attempting to play a file that doesn't exist !")
-                await self.text_channel.send(f"Le Didjé a paumé le fichier de **{entry.title}**, on passe à la suivante du coup...")
+        match entry.type:
+
+            case EntryType.LOCAL_FILE:
+                if entry._is_boot_file:
+                    file_path: str = entry._boot_file_path
+                else:
+                    file_path: str = config.downloadDirectory + entry.filename
+                if not os.path.exists(file_path):
+                    logger.error("[PLAYBACK.START] Attempting to play a file that doesn't exist !")
+                    self.dont_update_cursor_position = True
+                    self.remove_entry(self.cursor)
+                    await self.text_channel.send(f"Le Didjé a paumé le fichier de **{entry.title}**, on passe à la suivante du coup...")
+                    self.__on_after_play()
+
+            case EntryType.REMOTE:
+                file_path: str = entry.remote_url
+
+            case _:
+                logger.error(f"[PLAYBACK.START] Attempting to play an unknown entry file that doesn't exist ! (GID:{self.guild_id})")
+                self.dont_update_cursor_position = True
+                self.remove_entry(self.cursor)
+                await self.text_channel.send(f"J'ai trouvé une entrée bizarre et je sais pas quoi faire avec... bref, on passe à la suivante !")
                 self.__on_after_play()
-        else:
-            filename: str = entry.filename
         
         
         
@@ -258,7 +281,7 @@ class Queue():
                 contains_filters = True
 
         player: discord.FFmpegOpusAudio = discord.FFmpegOpusAudio(
-            filename,
+            file_path,
             before_options = before,
             options = f"-vn {custom_options}")
         
@@ -277,20 +300,20 @@ class Queue():
 
     def __on_after_play(self):
         if self.next_entry_condition is AfterEntryPlaybackAction.SEEK:
-            print(f"[QUEUE.AFTER_PLAY] on_after_play >> seek (GID:{self.guild_id})")
+            logger.debug(f"[QUEUE.AFTER_PLAY] on_after_play >> seek (GID:{self.guild_id})")
             return self.__play_seek()
         
         elif self.next_entry_condition is AfterEntryPlaybackAction.STOP:
             if not self.dont_update_cursor_position:
                 self.__update_cursor_for_next_entry()
 
-            print(f"[QUEUE.AFTER_PLAY] on_after_play >> stop (GID:{self.guild_id})")
+            logger.debug(f"[QUEUE.AFTER_PLAY] on_after_play >> stop (GID:{self.guild_id})")
             self.__stop_reset_play_status()
             return
         # elif self.next_entry_condition is NextEntryCondition.RESUME:
         #     pass
         
-        print(f"[QUEUE.AFTER_PLAY] on_after_play >> next entry (GID:{self.guild_id})")
+        logger.debug(f"[QUEUE.AFTER_PLAY] on_after_play >> next entry (GID:{self.guild_id})")
         self.__play_next()
 
         self.next_entry_condition = AfterEntryPlaybackAction.DEFAULT
@@ -349,9 +372,9 @@ class Queue():
             try:
                 fut.result()
             except Exception:
-                print(f"[ERROR] play_next(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
+                logger.critical(f"[ERROR] play_next(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
         else:
-            print("[PLAYBACK.PLAY_NEXT] End of queue")
+            logger.debug(f"[PLAYBACK.PLAY_NEXT] End of queue (GID:{self.guild_id})")
             self.__stop_reset_play_status()
             
 
@@ -371,9 +394,9 @@ class Queue():
             try:
                 fut.result()
             except Exception:
-                print(f"[ERROR] play_seek(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
+                logger.critical(f"[ERROR] play_seek(): a coroutine error occured (GID:{self.guild_id})\n\n{traceback.format_exc()}")
         else:
-            print("[PLAYBACK.PLAY_NEXT] Attempted seek at queue but it's at the end, ignoring...")
+            logger.debug(f"[PLAYBACK.PLAY_NEXT] Attempted seek at queue but it's at the end, ignoring... (GID:{self.guild_id})")
             self.__stop_reset_play_status()
 
 
@@ -383,7 +406,7 @@ class Queue():
         self.next_entry_condition = AfterEntryPlaybackAction.DEFAULT
         self.seek_time = -1
         self.dont_update_cursor_position = False
-        print("[PLAYBACK.STOP] playback stopped, and setting status to stopped")
+        logger.debug("[PLAYBACK.STOP] playback stopped, and setting status to stopped")
 
 
     async def add_entry(self, entry: Entry, position: int = None) -> int:

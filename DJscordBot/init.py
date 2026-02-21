@@ -1,3 +1,6 @@
+import os
+import platform
+
 from .app import *
 from .logging.utils import get_logger
 __logger = get_logger(f"{ROOT_LOGGER}.init")

@@ -8,13 +8,16 @@ from ..config import config
 from ..client import DJscordClient
 from ..Types.queue import Queue
 
+from ..logging.utils import get_logger
+logger = get_logger("djscordbot.manager.queue")
+
 class QueueManager():
     __queues: 'dict[int, Queue]' = {}
 
     @classmethod
     async def create_queue(self, guild_id: int, voice_client: discord.VoiceClient, text_channel: discord.TextChannel, bot_user: DJscordClient) -> Queue:
         self.__queues[guild_id] = Queue(guild_id, voice_client, text_channel)
-        print(f"[QUEUE.CREATE] Created queue for guild ({guild_id})")
+        logger.info(f"[CREATE] Created queue for guild ({guild_id})")
         await self.__queues[guild_id].boot(bot_user)
         return self.__queues[guild_id]
 
@@ -42,28 +45,28 @@ class QueueManager():
 
 
     @classmethod
-    async def remove_queue(cls, guild_id: int) -> bool:
+    async def remove_queue(cls, guild_id: int):
         if guild_id not in cls.__queues:
-            print(f"[QUEUE.REMOVE] guild({guild_id}) already removed")
+            logger.error(f"[REMOVE] guild({guild_id}) already removed")
             return
         if not cls.__queues[guild_id].has_voice_client:
             cls.__queues.pop(guild_id)
-            print(f"[QUEUE.REMOVE] Removed guild({guild_id}), had no VoiceClient")
+            logger.debug(f"[REMOVE] Removed guild({guild_id}), had no VoiceClient")
             return
 
         if not cls.__queues[guild_id].is_connected:
             cls.__queues.pop(guild_id)
-            print(f"[QUEUE.REMOVE] Removed guild({guild_id}), had a VoiceClient but wasn't connected")
+            logger.debug(f"[REMOVE] Removed guild({guild_id}), had a VoiceClient but wasn't connected")
             return
         # Stop play if need
         if cls.__queues[guild_id].is_playing:
             await cls.__queues[guild_id].stop()
-            print(f"[QUEUE.REMOVE] VoiceClient stoped in guild({guild_id}) ")
+            logger.debug(f"[REMOVE] VoiceClient stoped in guild({guild_id}) ")
         await asyncio.sleep(0.6)
         
         # Disconnect
-        await cls.__queues[guild_id].disconnect_and_cleanup()
-        print(f"[QUEUE.REMOVE] Disconnected in guild({guild_id})")
+        await cls.__queues[guild_id].disconnect()
+        logger.debug(f"[REMOVE] Disconnected in Guild({guild_id})")
 
         await asyncio.sleep(0.2)
         for entry in cls.__queues[guild_id].entries:
@@ -71,7 +74,7 @@ class QueueManager():
                 try:
                     os.remove(config.downloadDirectory + entry.filename) #If running on Windows, the file currently playing is not erased
                 except PermissionError :
-                    print(f"RemoveGuild: [EXCEPTION] PermissionError/Not allowed to remove file ({config.downloadDirectory + entry.filename})")
+                    logger.error(f"[REMOVE.FILE.EXCEPTION] PermissionError/Not allowed to remove file ({config.downloadDirectory + entry.filename})")
         
         cls.__queues.pop(guild_id)
-        print(f"[QUEUE.REMOVE] Removed guild({guild_id})")
+        logger.info(f"[REMOVE] Removed guild({guild_id})")

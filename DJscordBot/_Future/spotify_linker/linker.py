@@ -30,6 +30,9 @@ class SpotifyLinker:
 
 
 def __create_db():
+    # create folder if it doesn't exists
+    if not os.path.exists(DATABASE_ROOT_PATH):
+        os.mkdir(DATABASE_ROOT_PATH)
     con = sqlite3.connect(__DATABASE_NAME)
     con.execute("""
                     CREATE TABLE IF NOT EXISTS Linker (

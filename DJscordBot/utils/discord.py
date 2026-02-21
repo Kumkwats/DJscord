@@ -99,13 +99,13 @@ class EmbedBuilder():
 
         progress_text = ""
         if queue_data.cursor == entry_index:
-            if entry.type == EntryType.FILE and entry.duration > 0:
+            if entry.type == EntryType.LOCAL_FILE and entry.duration > 0:
                 progress_text = f"{cls.__create_progress_bar(time_elapsed, entry.duration, queue_data.is_paused)}\n\n"
             else:
                 progress_text = f"Durée d'écoute : {time_format(time_elapsed)} {'[Lecture suspendue]' if queue_data.is_paused else ''}\n\n"
 
         description: str = ""
-        if entry.type == EntryType.FILE and entry.duration > 0:
+        if entry.type == EntryType.LOCAL_FILE and entry.duration > 0:
             description += f"{progress_text}{entry.description}\n\n"
             
             description += f"Position dans la liste de lecture : {entry_index}"
