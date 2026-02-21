@@ -1,4 +1,6 @@
 import traceback
+from datetime import datetime, timezone
+import asyncio
 
 import discord
 from discord import app_commands, Interaction
@@ -38,10 +40,12 @@ def setup_events():
     async def on_ready():
         """called when the bot is logged in and ready to process commandes
         """
-        await BOT_CLIENT.change_presence(
-            activity=discord.Activity(
+        ready_activity = discord.Activity(
             type=discord.ActivityType.listening,
-            name=config.get_prefix()+"help"))
+            name="/play",
+            state="\"/queue current\" is a bad command name")
+        
+        await BOT_CLIENT.change_presence(activity=ready_activity)
         
         __logger.info(f"[READY] Logged in as {BOT_CLIENT.user} ({BOT_CLIENT.user.id})\n---------------- BEGIN LISTENING TO COMMANDS")
 
@@ -87,14 +91,16 @@ def setup_commands():
     __logger.debug("Registering commands...")
     musicCog = Music(BOT_CLIENT)
 
-    play_description = "Recherche YT ou bien un lien vers une vidéo ou une playlist"
+    # setup descriptions
+    descriptions: 'dict[str,str]' = {}
+    descriptions["play"] = "Recherche YT ou bien un lien vers une vidéo ou une playlist"
     if SPOTIFY_AVAILABLE:
-        play_description += " (prends aussi en charge les titres, albums et playlists Spotify)"
+        descriptions["play"] += " (prends aussi en charge les titres, albums et playlists Spotify)"
 
     @BOT_CLIENT.tree.command(description="Jouer musique")
     @app_commands.guild_only()
     @app_commands.rename(search_query="recherche")
-    @app_commands.describe(search_query=play_description)
+    @app_commands.describe(search_query=descriptions["play"])
     async def play(ctx: Interaction, search_query: str):
         await musicCog.cmd_play(InteractionWrapper(ctx), search_query)
 
@@ -224,6 +230,7 @@ def setup_commands():
         await manageCog.ping(InteractionWrapper(ctx))
 
     @BOT_CLIENT.tree.command(description="Est-ce que c'est pété ?")
+    @app_commands.guild_install()
     async def cpt(ctx: Interaction):
         await manageCog.cpt(InteractionWrapper(ctx))
     #endregion
@@ -233,6 +240,12 @@ def setup_commands():
     # print("[BOT.RUN] Running the bot")
 
 
+async def __async_start(token:str):
+    global BOT_CLIENT
+    await BOT_CLIENT.login(token)
+    await BOT_CLIENT.connect(reconnect=True)
+
+
 def start_bot():
     global BOT_CLIENT
     BOT_CLIENT = DJscordClient(description="djscord !", intents=create_intents())
@@ -240,4 +253,6 @@ def start_bot():
     setup_events()
     setup_commands()
 
-    BOT_CLIENT.run(config.token)
+    discord.utils.setup_logging(level=config.log_level)
+    
+    asyncio.run(__async_start(config.token))

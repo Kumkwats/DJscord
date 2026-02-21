@@ -24,10 +24,10 @@ class Manage():
 
     # @commands.command(description="est-ce que c'est pété ?")
     async def cpt(self, ctx: InteractionWrapper):
-        await ctx.respond("Est-ce que c'est pété ? Voici ce qu'il faut savoir:" +
-                                "\n# oui" + 
-                                "\n\n||(@\\Kkum si problème)||")
-        #await ctx.resopnd("Nan ça va tkt")
+        # await ctx.respond("Est-ce que c'est pété ? Voici ce qu'il faut savoir:" +
+        #                         "\n# oui" + 
+        #                         "\n\n||(@\\Kkum si problème)||")
+        await ctx.resopnd("Nan ça va tkt")
 
     # @commands.command() # TODO None type error quand pas dans le channel ?
     # @commands.is_owner()

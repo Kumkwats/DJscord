@@ -75,9 +75,9 @@ class _ColourFormatter(logging.Formatter):
 
 
 
-default_log_value = logging.INFO
+GLOBAL_LOG_LEVEL = logging.DEBUG if os.environ["DEBUG"] else logging.INFO
 
-def get_logger(log_name = None, log_level: int = default_log_value, is_root: bool = False) -> logging.Logger:
+def get_logger(log_name = None, log_level: int = GLOBAL_LOG_LEVEL, is_root: bool = False) -> logging.Logger:
     """
     Copied and adapted from the discord.py logging utility to get the same pretty colors
     """

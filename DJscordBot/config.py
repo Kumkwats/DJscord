@@ -4,7 +4,7 @@ import json
 
 from .app import *
 
-from .logging.utils import get_logger
+from .logging.utils import get_logger, GLOBAL_LOG_LEVEL
 logger = get_logger(f"{ROOT_LOGGER}.config")
 
 class Config():
@@ -124,19 +124,7 @@ class Config():
             self.debug = True
             logger.warning("[DEBUG] Debug flag activated ! This may create quite some additional files at run time")
 
-
-
-    @classmethod
-    def get_prefix(self):
-        return "\u00b5"
-        # return self.conf['prefix']
-
-    @classmethod
-    def set_prefix(cls, prefix):
-        cls.json_confing['prefix'] = prefix
-        f = open(CFGFILE, 'w')
-        json.dump(cls.json_confing, f)
-        f.close()
+        self.log_level = GLOBAL_LOG_LEVEL
 
 
 
