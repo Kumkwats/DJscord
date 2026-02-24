@@ -85,8 +85,8 @@ class Music():
         else:
             current_queue_voice_channel: discord.VoiceChannel = queue.voice_channel
             if not queue.is_connected:
-                logger.info(f"[VOICE.STATUS] voice client apparently not connected, attempting reconnection... (GID:{guild_id})")
-                (success, err_message) = await self.__attempt_recovering_unexpected_no_voice_channel(author_voice_channel)
+                logger.warning(f"[VOICE.STATUS] voice client apparently not connected, attempting reconnection... (GID:{guild_id})")
+                (success, err_message) = await self.__attempt_recovering_unexpected_no_voice_channel(queue, author_voice_channel)
                 if not success:
                     await interac_wrapper.whisper_to_author(err_message)
                     return await QueueManager.remove_queue(guild_id)
