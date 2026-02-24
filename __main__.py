@@ -70,6 +70,9 @@ if __name__ == "__main__":
     @bot.event
     async def on_connect():
         logger.info("[CONNECT] Established connection with Discord")
+        logger.debug("[CONNECT.SYNC] Syncing app commands with Discord")
+        await bot.tree.sync()
+        logger.debug("[CONNECT.SYNC] Finished Syncing app commands with Discord")
         pass
     
     @bot.event
