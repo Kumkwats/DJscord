@@ -51,6 +51,9 @@ def setup_events():
     @BOT_CLIENT.event
     async def on_connect():
         __logger.info("[CONNECT] Established connection with Discord")
+        __logger.debug("[CONNECT.SYNC] Syncing app commands with Discord")
+        await BOT_CLIENT.tree.sync()
+        __logger.debug("[CONNECT.SYNC] Finished Syncing app commands with Discord")
         pass
     
     @BOT_CLIENT.event
