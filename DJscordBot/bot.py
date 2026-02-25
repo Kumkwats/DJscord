@@ -1,6 +1,5 @@
-import traceback
-from datetime import datetime, timezone
 import asyncio
+import traceback
 
 import discord
 from discord import app_commands, Interaction
@@ -235,18 +234,12 @@ def setup_commands():
         await manageCog.cpt(InteractionWrapper(ctx))
     #endregion
 
-    # print("[BOT.COG] Added Debug Cog")
-    # bot.add_cog(Debug(BOT_CLIENT))
-    # print("[BOT.RUN] Running the bot")
 
 
-async def __async_start(token:str):
-    global BOT_CLIENT
-    await BOT_CLIENT.login(token)
-    await BOT_CLIENT.connect(reconnect=True)
 
 
-def start_bot():
+
+async def start_bot():
     global BOT_CLIENT
     BOT_CLIENT = DJscordClient(description="djscord !", intents=create_intents())
 
@@ -255,4 +248,17 @@ def start_bot():
 
     discord.utils.setup_logging(level=config.log_level)
     
-    asyncio.run(__async_start(config.token))
+    await BOT_CLIENT.login(config.token)
+
+    # allows for a cleaner stop when SIGINT is recieved
+    bot_connect_loop_task = asyncio.create_task(BOT_CLIENT.connect(reconnect=True))
+    try:
+        await asyncio.shield(bot_connect_loop_task)
+    except asyncio.CancelledError:
+        await stop_bot()
+
+
+async def stop_bot():
+    __logger.info("[STOP] Stop signal raised\n---------------- END LISTENING TO COMMANDS")
+    await BOT_CLIENT.close()
+    BOT_CLIENT.clear()
