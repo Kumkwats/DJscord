@@ -8,7 +8,7 @@ Made with **Python 3.12**<br>
 Powered by **discord.py** and **yt-dlp**.
 
 > [!CAUTION]
-> Be aware that the messages sent by the bot are in the imaginary language known as 	<ins>**French**</ins>
+> Be aware that the messages sent by the bot are in the imaginary language known as <ins>**French**</ins>
 
 <br>
 
@@ -37,17 +37,17 @@ Powered by **discord.py** and **yt-dlp**.
 
 ## Resource Folder Structure
 
-Djscord will create the mandatory folders for its function : `resources/` where it stores `config.json` and `resources/download/` where it store downloaded audio files for playback in the voice channel.
+Djscord will create the mandatory folders for its function: `resources/` where it stores *the now optionnal* `config.json` and `resources/download/` where it store downloaded audio files for playback in the voice channel.
 
-DJscord can play custom sounds when it joins the voice channel. To add them, place audio files in the folder `resources/sounds/startup/`
+DJscord can also play custom sounds when it joins the voice channel. To add them, place audio files in the folder `resources/sounds/startup/`. (No need for restart)
 
 
 ## Configuration
 
-There are 2 main ways to pass configs to DJscord : Environment Variables (includes `.env` file) or the `config.json` file mentionned above.
+There are 2 main ways to pass configs to DJscord: Environment Variables (includes `.env` file) or the `config.json` file mentionned above.
 
 > [!IMPORTANT]
-> Environment variables are the recommended way.<br>
+> Environment variables are the preferred way.<br>
 > Both can coexist but the environment variables will take precedence over the JSON file.
 
 <br>
@@ -57,18 +57,18 @@ There are 2 main ways to pass configs to DJscord : Environment Variables (includ
 In order for Djscord to be able to communicate with Discord, you need to create a Discord Application [here](https://discord.com/developers/applications) and get a **bot token**.
 
 > **Config key:**
-> - Env variable : `DISCORD_TOKEN`
-> - config.json : `discord-token`
+> - Env variable: `DISCORD_TOKEN`
+> - config.json: `discord-token`
 
 <br>
 
 ### Spotify Developper Credentials (Optional)
 
-The Spotify search isn't enabled by default as it needs credentials to access to the API. If you want to enable adding music from spotify links, you may create a Spotify application [here](https://developer.spotify.com/dashboard/applications)
+The Spotify search isn't enabled by default as it needs credentials to access to the API. If you want to enable adding music from spotify links, you may create a Spotify application [here](https://developer.spotify.com/dashboard/applications) and then add the credentials to the config.
 
 > **Config key:**
-> - Env variable : `SPOTIFY_CLIENT_ID` & `SPOTIFY_CLIENT_SECRET`
-> - config.json : `spotify-client-id` & `spotify-client-secret`
+> - Env variable: `SPOTIFY_CLIENT_ID` & `SPOTIFY_CLIENT_SECRET`
+> - config.json: `spotify-client-id` & `spotify-client-secret`
 
 <br>
 
@@ -82,8 +82,8 @@ The Spotify search isn't enabled by default as it needs credentials to access to
 If you've setup the POT Provider, you need to specify the IP address in the config.
 
 > **Config key:**
-> - Env variable : `YTDLP_BGUTIL_SERVER_IP`
-> - config.json : `bgutil-server-ip`
+> - Env variable: `YTDLP_BGUTIL_SERVER_IP`
+> - config.json: `bgutil-server-ip`
 
 
 <br>
@@ -95,7 +95,7 @@ If you've setup the POT Provider, you need to specify the IP address in the conf
 
 Docker Compose is the simplest way to setup.
 
-You just need to create a compose.yaml file in the root of the repo :
+You only need to create a compose.yaml file in the root folder of the repo:
 
 ```yaml
 services:
@@ -109,33 +109,33 @@ services:
 
 <br>
 
-To pass environment variables, you can either use :
+And add the config values:
+- Via environment variables, you can either use:
 
-- The `environment` attribute to set them up directly :
+  - The `environment` attribute to set them up directly:
+    ```yaml
+        environment:
+          - DISCORD_TOKEN: "<your_bot_token_here>"
+          - ...
+    ```
 
-```yaml
-    environment:
-      - DISCORD_TOKEN: "<your_bot_token_here>"
-      - ...
-```
+  - The `env_file` attribute if you choose to use a `.env` file instead: 
 
-- The `env_file` attribute if you choose to use the `.env` file: 
-
-```yaml
-    env_file: "<path/to/file.env>"
-```
+    ```yaml
+        env_file: "<path/to/file.env>"
+    ```
 
 <br>
 
-If using `config.json` or you want to be able to view the resource folder, you need to mount a folder to act as the resource folder.
+- If using `config.json` or you want to be able to view the resource folder, you need to mount a folder to act as the resource folder.
 
-```yaml
-    volumes:
-      - <path-to-the-resource-folder-to-mount>:/app/resources
-```
+  ```yaml
+      volumes:
+        - <path-to-the-resource-folder-to-mount>:/app/resources
+  ```
 
 
-Then to launch it with the command :
+Then you can launch it with the command:
 
 ```bash
 docker compose up --build -d
@@ -151,14 +151,17 @@ docker compose up --build -d
 
 > [!CAUTION]
 > This method of installation has not be really maintained and lacks multiple steps:
-> - Setup of the external tools necessary for the yt_dlp plugins used in Djscord : **Deno** (included in the dockerfile) for resolving JS challenges and the **POT Provider**
+> - Setup of the external tools necessary for the yt_dlp plugins used in Djscord: **Deno** (included when building the docker image) for resolving JS challenges and the **POT Provider**
 > - **Config setup** with environment variables or `config.json`. Please refer to the setup and docker section for this.
 
 <br>
 
 ### Dependencies
 
-DJscord needs **Python 3.12** with **pip**, **ffmpeg** for encoding/decoding the audio and **git** for cloning and updating the project.
+DJscord needs:
+- **Python 3.12** with **pip**
+- **ffmpeg** for encoding/decoding audio
+- **[Deno](https://deno.land/)**, a dependecy for yt_dlp to be usable on certain sites **(Not evoked here! See Caution notice above)**
 
 **Ubuntu:**
 ```bash
@@ -167,7 +170,7 @@ sudo apt install python3 python3-pip ffmpeg git
 
 <br>
 
-### Clone repo and install python packages dependencies
+### Clone repo and install dependencies
 
 ```bash
 git clone https://github.com/Kumkwats/DJscord.git
@@ -176,24 +179,25 @@ pip install -r requirements.txt
 ```
 
 > [!NOTE]
-> Although not used in this tutorial, I recommend using Python's virtual environment.
+> Although not evoked here, I strongly recommend using Python's virtual environment.
 
 <br>
 
 ### Run
 
 > [!WARNING]
-> You should always execute the run commands in the root folder of the repo
+> You should always execute the run command in the root folder of the repo
 
 ```bash
 python3 .
 ```
 
+
 <br>
 
 ### Running as user
 
-It's recommended to run the python script as user on the system (not as root). You can run the bot on your current username or create a new one with a home folder that is the root folder of the repo
+It's highly recommended to run the bot a user on the system (i.e. not as root). You can run it on your current username or create a new one with a home folder that is the root folder of the repo
 
 #### Create a user:
 ```bash
