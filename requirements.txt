@@ -1,6 +1,10 @@
 python-dotenv~=1.2.2
 
-spotipy==2.26.0
+spotapi~=1.2.7
+# spotapi's additional requirements
+pymongo~=4.16.0
+websockets~=16.0
+
 
 youtube_search_python==1.6.6
 

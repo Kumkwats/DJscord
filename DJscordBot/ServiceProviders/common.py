@@ -1,8 +1,22 @@
-import sys
-if sys.version_info.minor <= 12:
-    from typing_extensions import Self
-else:
-    from typing import Self
+from typing import Self
+
+
+class Identifier:
+    def __init__(self, provider: str, type: str, id: str):
+        self.provider: str = provider
+        self.type: str = type
+        self.id: str = id
+
+    def __repr__(self):
+        return f"{self.provider}:{self.type}:{self.id}"
+
+    @classmethod
+    def parse(cls, uri: str) -> Self:
+        splitted_uri = uri.split(':')
+        if len(splitted_uri) != 3:
+            raise ValueError("The provided uri is not in the correct format")
+        return Identifier(splitted_uri[0], splitted_uri[1], splitted_uri[2])
+
 
 class CommonResponseData():
     def __init__(self, provider: str, provider_api_id: str, request_data, inferred_type: str = None):
