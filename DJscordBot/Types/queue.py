@@ -194,7 +194,7 @@ class Queue():
                 boot_entry.title = boot_entry.title.upper()
             if random.random() < 0.01 :
                 boot_entry.is_reverse = True
-                boot_entry = boot_entry.title[::-1]
+                boot_entry.title = boot_entry.title[::-1]
 
         if boot_entry is not None:
             await self.add_entry(boot_entry)
@@ -413,6 +413,7 @@ class Queue():
         
         if position is None or position == self.size:
             if not entry.is_ready:
+                #TODO: implement queueing
                 return -1
             self.entries.append(entry)
         else:
