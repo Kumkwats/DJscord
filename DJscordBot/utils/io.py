@@ -1,12 +1,14 @@
 import os
 import random
 import subprocess
-
+import shutil
 
 from ..config import config
 
 from ..logging.utils import get_logger
 logger = get_logger("djscordbot.utils.io")
+
+
 
 
 def pick_sound_file(folder_name: str) -> tuple[bool, str]:
@@ -25,14 +27,23 @@ def pick_sound_file(folder_name: str) -> tuple[bool, str]:
 
 
 def get_file_duration(filepath: str) -> float:
-    if " " in filepath:
-        filepath = f'"{filepath}"'
     if not os.path.isfile(filepath):
+        logger.error("get_file_duration: file not found")
         return -1
-    result: subprocess.CompletedProcess = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", f'"{filepath}"'], stdout=subprocess.PIPE)
+    
+    ffprobe_path = shutil.which("ffprobe")
+    if ffprobe_path is None:
+        logger.critical("ffmpeg/ffprobe is not installed")
+        return -999
+
+    result: subprocess.CompletedProcess = subprocess.run([ffprobe_path, "-i", filepath, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1"], capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.error(f"get_file_duration: ffprobe error\n{result.stderr}")
+        return -1
     try:
         _float = float(result.stdout)
         return _float
     except ValueError:
+        logger.error("get_file_duration: unable to get duration from ffprobe result")
         return -1
 
