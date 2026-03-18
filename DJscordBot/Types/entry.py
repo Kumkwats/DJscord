@@ -3,7 +3,7 @@ from enum import Enum
 
 import discord
 
-
+from DJscordBot.utils.io import get_file_duration
 
 class EntryType(Enum):
     UNKNOWN = 0
@@ -60,7 +60,7 @@ class Entry():
 
         # file
         self.filename: str = None
-        self.duration = 0
+        self.duration: float = 0
         self.size = 0
 
         # stream
@@ -93,6 +93,9 @@ class Entry():
     def map_to_remote(self, remote_url: str):
         self.type = EntryType.REMOTE
         self.remote_url = remote_url
+        (_success, _duration, _) = get_file_duration(remote_url)
+        if _success:
+            self.duration = _duration
         self.is_ready = True
 
     

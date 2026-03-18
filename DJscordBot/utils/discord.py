@@ -18,8 +18,8 @@ class InteractionWrapper():
         self.guild_id: int = context.guild.id
         self.guild: discord.Guild = context.guild
         self.author: discord.Member = context.user
-        self.__message_id: int = None
-        self.__last_message_content: str = ""
+        self._message_id: int = None
+        self._last_message_content: str = ""
 
     @property
     def voice_client(self) -> discord.VoiceClient | None:
@@ -27,9 +27,9 @@ class InteractionWrapper():
 
 
     async def think(self, ephemeral = False):
-        if self.__message_id is None:
+        if self._message_id is None:
             callback_response: discord.InteractionCallbackResponse = await self.interaction.response.defer(ephemeral=ephemeral)
-            self.__message_id = callback_response.message_id
+            self._message_id = callback_response.message_id
 
     async def send_message_in_author_channel(self, string: str):
         await self.interaction.channel.send(string)
@@ -37,15 +37,15 @@ class InteractionWrapper():
 
 
     async def respond(self, content:str, ephemeral: bool = False):
-        if self.__message_id is None:
-            self.__last_message_content = content
+        if self._message_id is None:
+            self._last_message_content = content
             await self.__init_response(content, ephemeral=ephemeral)
         else:
-            self.__last_message_content = content
-            await self.__edit_message(self.__last_message_content)
+            self._last_message_content = content
+            await self.__edit_message(self._last_message_content)
 
     async def send_embed(self, embed: discord.Embed, ephemeral: bool = False):
-        if self.__message_id is None:
+        if self._message_id is None:
             await self.__init_response(None, embed=embed, ephemeral=ephemeral)
         else:
             await self.__edit_message(None, embed=embed)
@@ -57,22 +57,22 @@ class InteractionWrapper():
 
 
     async def append_to_last_whisper(self, content_to_append: str, new_line = True, save_edit = True):
-        if self.__message_id is None:
-            self.__last_message_content = content_to_append
-            await self.__init_response(self.__last_message_content, ephemeral = True)
+        if self._message_id is None:
+            self._last_message_content = content_to_append
+            await self.__init_response(self._last_message_content, ephemeral = True)
         else:
             if new_line:
                 content_to_append = "\n" + content_to_append
             if save_edit:
-                self.__last_message_content += content_to_append
-                await self.__edit_message(self.__last_message_content)
+                self._last_message_content += content_to_append
+                await self.__edit_message(self._last_message_content)
             else:
-                await self.__edit_message(self.__last_message_content + content_to_append)
+                await self.__edit_message(self._last_message_content + content_to_append)
 
 
     async def __init_response(self, content: str, embed: discord.Embed = None, ephemeral: bool = False):
         callback_response = await self.interaction.response.send_message(content, embed=embed, ephemeral = ephemeral)
-        self.__message_id = callback_response.message_id
+        self._message_id = callback_response.message_id
 
     async def __edit_message(self, content: str, embed: discord.Embed = None):
         # await self.context.followup.edit_message(self.__message_id, content=content)

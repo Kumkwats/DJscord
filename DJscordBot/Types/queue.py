@@ -10,7 +10,7 @@ import discord
 from ..config import config
 from ..client import DJscordClient
 from ..utils.format import time_format
-from ..utils.io import pick_sound_file
+from ..utils.io import get_file_duration, pick_sound_file
 
 from .entry import Entry, EntryType
 from .enums import RepeatMode, AfterEntryPlaybackAction
@@ -207,7 +207,8 @@ class Queue():
                 new_entry = Entry("Booting up...", bot_user.user, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
                 new_entry.add_image("https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/3ddaa372-c58c-4587-911e-1d625dff64dc/dapv26n-b138c16c-1cfc-45c3-9989-26fcd75d3060.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvM2RkYWEzNzItYzU4Yy00NTg3LTkxMWUtMWQ2MjVkZmY2NGRjXC9kYXB2MjZuLWIxMzhjMTZjLTFjZmMtNDVjMy05OTg5LTI2ZmNkNzVkMzA2MC5qcGcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.PnU42OFMHcio7nJ4a5Jsp8C-d6exHqd3vInU1682x1E")
                 new_entry.add_description("Chaîne : [DJPatrice](https://github.com/Kumkwats/DJscord)")
-                new_entry.map_to_file(file)
+                (_success, _duration, _) = get_file_duration(file)
+                new_entry.map_to_file(file, _duration)
                 new_entry._is_boot_file = True
                 new_entry._boot_file_path = file
                 logger.debug(f"[STARTUP] startup file added to queue")
