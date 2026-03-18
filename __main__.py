@@ -10,6 +10,8 @@ import traceback
 import discord
 from discord import app_commands, Intents, Interaction
 
+from DJscordBot.utils import _dummy_import
+
 from DJscordBot.client import DJscordClient
 from DJscordBot.config import config
 

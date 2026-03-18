@@ -14,7 +14,9 @@ from ._track import *
 from ._album import *
 
 
-from spotapi import client_pool, TLSClient, Public, PublicAlbum, PublicPlaylist
+
+from spotapi.client import TLSClient
+from spotapi.public import client_pool, Public, PublicAlbum, PublicPlaylist
 
 
 def get_data(url: str, interaction: MediaProcessInteraction) -> list[MediaEntry]:

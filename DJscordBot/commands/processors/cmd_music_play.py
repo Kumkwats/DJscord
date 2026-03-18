@@ -116,10 +116,10 @@ class PlayCmdProcessor():
 
         match query_type:
             case PlayQueryType.LINK_SPOTIFY:
-                if not config.spotifyEnabled:
-                    logger.debug(f"[SPOTIFY.DISABLED] Spotify research is disabled (GID:{self.response_wrapper.guild.id})")
-                    self.finished = True
-                    return await self.response_wrapper.whisper_to_author(":warning: La recherche Spotify n'est pas activée")
+                # if not config.spotifyEnabled:
+                #     logger.debug(f"[SPOTIFY.DISABLED] Spotify research is disabled (GID:{self.response_wrapper.guild.id})")
+                #     self.finished = True
+                #     return await self.response_wrapper.whisper_to_author(":warning: La recherche Spotify n'est pas activée")
                 return await self.__spt_new_process_link(query)
             
             
