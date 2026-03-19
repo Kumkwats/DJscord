@@ -82,7 +82,7 @@ def process_data(identifier: SptIdentifier, interaction: MediaProcessInteraction
             _spt_logger.debug("process_data(): creating entry")
             song_entry: Entry = Entry(f"{song.first_artists[0].name} - {song.name}", interaction.wrapper.author, song.identifier.to_web_url())
             song_entry.add_image(song.album_art.cover_art)
-            description = f"{song.album.name}]({song.album.identifier.to_web_url()})\n" # Album
+            description = f"[{song.album.name}]({song.album.identifier.to_web_url()})\n" # Album
             description += f"Artiste : [{song.first_artists[0].name}]({song.first_artists[0].identifier.to_web_url()})\n" # Artiste
             description += f"-# source: Spotify"
             song_entry.add_description(description)
@@ -114,7 +114,7 @@ def process_data(identifier: SptIdentifier, interaction: MediaProcessInteraction
                 track_entry: Entry = Entry(f"{track.artists[0].name} - {track.name}", interaction.wrapper.author, track_url)
                 track_entry.set_playlist(entry_playlist)
                 track_entry.add_image(album.visual_art.cover_art)
-                description = f"{album.name}]({track_url})\n" # Album
+                description = f"[{album.name}]({track_url})\n" # Album
                 description += f"Artiste : [{album.artists[0].name}]({album.artists[0].identifier.to_web_url()})\n" # Artiste
                 description += f"-# source: Spotify"
                 track_entry.add_description(description)

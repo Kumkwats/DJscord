@@ -106,7 +106,7 @@ class EmbedBuilder():
 
         description: str = ""
         if entry.type == EntryType.LOCAL_FILE and entry.duration > 0:
-            description += f"{progress_text}{entry.description}\n\n"
+            description += f"{progress_text}\n{entry.description}\n\n"
             
             description += f"Position dans la liste de lecture : {entry_index}"
             if entry.playlist is not None:
