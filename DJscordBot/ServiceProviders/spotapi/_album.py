@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import StrEnum, auto
 from typing import Any
 
 from ._core import SptIdentifier, _spt_logger, SptBase, SptCoverArt
@@ -6,7 +7,32 @@ from ._track import SptSongBase
 from ._artist import SptArtistBase, parse_artists_info, parse_album_track_artists_info
 
 
-_ALBUM_KEYS = ['__typename', 'uri', 'name', 'label', 'tracksV2', 'discs', 'artists', 'date', 'coverArt', 'copyright', 'isPreRelease']
+_ALBUM_KEYS = ['__typename', 'uri', 'name', 'label', 'tracksV2', 'type', 'discs', 'artists', 'date', 'coverArt', 'copyright', 'isPreRelease']
+
+
+
+class SptAlbumType(StrEnum):
+    ALBUM = auto()
+    EP = auto()
+    SINGLE = auto()
+    COMPILATION = auto()
+
+
+    @classmethod
+    def _missing_(cls, value: str):
+        value = value.lower()
+        for member in cls:
+            if member.value == value:
+                return member
+        return None
+
+
+    def to_desc(self):
+        match self.value:
+            case SptAlbumType.EP:
+                return "EP"
+            case _:
+                return self.value.capitalize()
 
 
 
@@ -26,6 +52,7 @@ class SptAlbumDisc():
 
 @dataclass
 class SptAlbum(SptBase):
+    type: str
     label: str
     discs: list[SptAlbumDisc]
     artists: list[SptArtistBase]
@@ -77,10 +104,17 @@ def process_album_data(raw_data: dict[str, Any]) -> SptAlbum | None:
         cover_art=max(sanitised_data['coverArt']['sources'], key=lambda cover_art_source: cover_art_source['width'])['url'],
         color_hex=sanitised_data['coverArt']['extractedColors']['colorRaw']['hex']
         )
+    
+    albumtype = SptAlbumType(sanitised_data['type'].lower())
+
+    if albumtype is None:
+        _spt_logger.warning(f"Unknown album type : {sanitised_data['type']}")
+        albumtype = SptAlbumType('album')
 
     return SptAlbum(
         identifier=uri,
         name=name,
+        type=albumtype.to_desc(),
         label=label,
         discs=discs,
         artists=artists,
