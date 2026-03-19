@@ -4,7 +4,7 @@ from typing import Any
 
 from ._core import SptIdentifier, _spt_logger, SptBase, SptCoverArt
 from ._track import SptSongBase
-from ._artist import SptArtistBase, parse_artists_info, parse_album_track_artists_info
+from ._artist import SptArtistBase, parse_artists_info
 
 
 _ALBUM_KEYS = ['__typename', 'uri', 'name', 'label', 'tracksV2', 'type', 'discs', 'artists', 'date', 'coverArt', 'copyright', 'isPreRelease']
@@ -131,7 +131,7 @@ def _tracksV2_track_mapping(tracksV2_data: dict[str, Any]) -> list[SptAlbumTrack
         track_number=track['track']['trackNumber'],
         duration=track['track']['duration']["totalMilliseconds"],
         playcount=track['track']['playcount'],
-        artists=parse_album_track_artists_info(track['track']['artists']['items'])
+        artists=parse_artists_info(track['track']['artists']['items'])
         )
         for track in tracksV2_data['items']]
 
