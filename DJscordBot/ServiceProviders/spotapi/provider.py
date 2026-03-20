@@ -118,7 +118,7 @@ def process_data(identifier: SptIdentifier, interaction: MediaProcessInteraction
                 description += f"Artiste : [{album.artists[0].name}]({album.artists[0].identifier.to_web_url()})\n" # Artiste
                 description += f"-# source: Spotify"
                 track_entry.add_description(description)
-                track_entry.duration = int(track.duration/1000)
+                track_entry.duration = float(track.duration/1000)
                 
                 ret_entry_list.append(track_entry)
             _spt_logger.debug("process_data(): processing ended")

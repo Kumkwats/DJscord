@@ -24,15 +24,12 @@ from ...Types.enums import PlayQueryType
 from ...Types.entry import Entry, EntryPlaylist
 from ...Managers.queueManager import QueueManager
 from ...utils.discord import InteractionWrapper
-from ...utils.io import get_file_duration
 
 from ...logging.utils import get_logger
 logger = get_logger("djscordbot.music.play_processor")
 
 
-BYPASS_SONG_LINK = False
 PLAYLIST_LIMIT_ENTRIES = 30
-
 
 
 class PlayCmdProcessor():
@@ -116,10 +113,6 @@ class PlayCmdProcessor():
 
         match query_type:
             case PlayQueryType.LINK_SPOTIFY:
-                # if not config.spotifyEnabled:
-                #     logger.debug(f"[SPOTIFY.DISABLED] Spotify research is disabled (GID:{self.response_wrapper.guild.id})")
-                #     self.finished = True
-                #     return await self.response_wrapper.whisper_to_author(":warning: La recherche Spotify n'est pas activée")
                 return await self.__spt_new_process_link(query)
             
             
@@ -325,13 +318,13 @@ class PlayCmdProcessor():
                     logger.warning("[YOUTUBE.DOWNLOAD.REMOVED_QUEUE] Downloaded video but the queue has been removed while downloading")
                     return (False, f":warning: Téléchargement de {entry.title} effectué mais entre temps la liste de lecture a été supprimée")
                 
-                filename = yt_video.get_filename()
+                file_path = yt_video.get_file_path()
                 try:
-                    file_size = os.path.getsize(config.downloadDirectory + filename)
-                except:
-                    logger.error("[YOUTUBE.DOWNLOAD.FILE_SIZE.ERROR] trying to find a file that doesn't exist")
+                    entry.map_to_file(file_path)
+                except ValueError as err:
+                    logger.error("[YOUTUBE.DOWNLOAD.ENTRY.MAP] error while mapping audio to entry\nError: {err}")
                     return (False, f":warning: Erreur lors du téléchargement de {entry.title}")
-                entry.map_to_file(filename, yt_video.duration, file_size)
+                entry.yt_video_url = yt_video.web_url
                 position = await queue.add_entry(entry)
                 logger.info(f"[YOUTUBE.PROCESS.SUCCESS] title:{entry.title} | youtube.id:{yt_video.id} has been added to queue")
                 return (True, f"[{position}] **{entry.title}** a été ajouté à la file d'attente")
@@ -463,10 +456,7 @@ class PlayCmdProcessor():
 
 
     #region Spotapi
-    from DJscordBot.ServiceProviders.common import CommonResponseData
-    
-    
-    
+
     #TODO: logger it !
     async def __spt_new_process_link(self, link):
         if PlayCmdProcessor.playlist_lock.locked():
@@ -617,7 +607,11 @@ class PlayCmdProcessor():
 
     async def __process_audio_content_url(self, url: str):
         new_entry = Entry(url, self.response_wrapper.author, url)
-        new_entry.map_to_remote(url)
+        try:
+            new_entry.map_to_file(url)
+        except ValueError as err:
+            logger.error(f"error while mapping audio to entry\nError: {err}")
+            return (False, f":warning: Erreur lors de l'analyse de {new_entry.title}")
         queue: Queue = self.__get_queue_from_ctx()
         position = await queue.add_entry(new_entry)
         return await self.response_wrapper.whisper_to_author(f"[{position}] **{new_entry.title}** a été ajouté à la file d'attente\n{self.__get_processing_time()}")
@@ -633,10 +627,11 @@ class PlayCmdProcessor():
             logger.error("[YOUTUBE.DOWNLOAD.FILE_SIZE.ERROR] trying to find a file that doesn't exist")
             return (False, f":warning: Erreur lors du téléchargement de {new_entry.title}")
         
-        (_success, _duration, _) = get_file_duration(config.downloadDirectory + filename)
-        file_size = os.path.getsize(config.downloadDirectory + filename)
-        new_entry.map_to_file(filename, _duration, file_size)
-        
+        try:
+            new_entry.map_to_file(config.downloadDirectory + filename)
+        except ValueError as err:
+            logger.error(f"error while mapping audio to entry\nError: {err}")
+            return (False, f":warning: Erreur lors du téléchargement de {new_entry.title}")
         queue: Queue = self.__get_queue_from_ctx()
         position = await queue.add_entry(new_entry)
         logger.info(f"[PLAY.TRANSACTION.SUCCESS] '{result.data['id']}' has been added to queue")

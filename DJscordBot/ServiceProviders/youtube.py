@@ -134,7 +134,10 @@ class   YoutubeVideo(YoutubeBaseObject):
         self.is_live: bool = request_data['is_live']
 
     def get_filename(self) -> str:
-        return ydl_downloader.prepare_filename(self._raw_data)[len(config.downloadDirectory):]
+        return self.get_file_path()[len(config.downloadDirectory):]
+
+    def get_file_path(self) -> str:
+        return ydl_downloader.prepare_filename(self._raw_data)
 
     def __str__(self):
         return f"Vidéo youtube | titre: '{self.name}' | id: '{self.id}'"

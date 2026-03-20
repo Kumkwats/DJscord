@@ -1,9 +1,12 @@
+import os
+
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 import discord
 
-from DJscordBot.utils.io import get_file_duration
+from DJscordBot.utils.io import AudioFileAttributes
 
 class EntryType(Enum):
     UNKNOWN = 0
@@ -26,7 +29,7 @@ class EntryFileData:
 
 
 
-class EntryPlaylist():
+class EntryPlaylist:
     """
     Class representing a playlist data for an entry.
     """
@@ -38,7 +41,7 @@ class EntryPlaylist():
         self.web_url: str = web_url
 
 
-class Entry():
+class Entry:
     """
     Class representing an entry in the queue.
     An entry can be a file or a stream.
@@ -48,6 +51,7 @@ class Entry():
         self.title: str = title
         self.user: discord.User = user
         self.web_url: str = web_url
+        self.yt_video_url: str = None
 
         self.is_ready = False
 
@@ -81,22 +85,38 @@ class Entry():
     def set_playlist(self, playlist: EntryPlaylist):
         self.playlist = playlist
 
-
-    def map_to_file(self, filename: str, duration = 0, file_size = 0):
-        self.type = EntryType.LOCAL_FILE
-        self.filename = filename
-        self.duration = duration
-        self.size = file_size
+    def map_to_file(self, file_path: str) -> bool:
+        try:
+            file_attributes = AudioFileAttributes(file_path)
+        except ValueError as err:
+            raise ValueError(err.args)
+        if file_attributes.is_local:
+            self.type = EntryType.LOCAL_FILE
+            self.file_path = file_path
+            self.filename = os.path.basename(file_path)
+        else:
+            self.type = EntryType.REMOTE
+            self.remote_url = file_path
+        self.duration = file_attributes.duration
+        self.size = file_attributes.byte_size
         self.is_ready = True
+        return True
+
+    # def map_to_file(self, filename: str, duration = 0, file_size = 0):
+    #     self.type = EntryType.LOCAL_FILE
+    #     self.filename = filename
+    #     self.duration = duration
+    #     self.size = file_size
+    #     self.is_ready = True
 
 
-    def map_to_remote(self, remote_url: str):
-        self.type = EntryType.REMOTE
-        self.remote_url = remote_url
-        (_success, _duration, _) = get_file_duration(remote_url)
-        if _success:
-            self.duration = _duration
-        self.is_ready = True
+    # def map_to_remote(self, remote_url: str):
+    #     self.type = EntryType.REMOTE
+    #     self.remote_url = remote_url
+    #     (_success, _duration, _) = get_audio_file_attributes(remote_url)
+    #     if _success:
+    #         self.duration = _duration
+    #     self.is_ready = True
 
     
 

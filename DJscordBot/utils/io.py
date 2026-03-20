@@ -1,14 +1,15 @@
+from genericpath import isfile
 import os
 import random
 import subprocess
 import shutil
 import sys
+from typing import Any
 
 from ..config import config
 
 from ..logging.utils import get_logger
 logger = get_logger("djscordbot.utils.io")
-
 
 
 
@@ -27,40 +28,22 @@ def pick_sound_file(folder_name: str) -> tuple[bool, str]:
     return False, "" # Folder does not exist
 
 
-def get_file_duration(filepath: str) -> tuple[bool, float, str]:
-    """
-    Get the duration of an audio file (local or remote) using ffprobe.
-    :param filepath: Path to the audio file.
+_FFPROBE_PATH = shutil.which("ffprobe")
 
-    :returns:
-        A tuple with the following elements:
-
-        - bool: False if an error is encountered.
-
-        - float: the duration in seconds.
-
-        - str: Error message if any.
-    """
-    if not os.path.isfile(filepath):
-        logger.error("[GET_DURATION] file not found")
-        return (False, -10, "file not found")
-
-    
-    ffprobe_path = shutil.which("ffprobe")
-    if ffprobe_path is None:
-        logger.critical("[GET_DURATION] ffmpeg/ffprobe is not installed")
-        return (False, sys.float_info.min, "ffmpeg/ffprobe is not installed")
-
-    result: subprocess.CompletedProcess = subprocess.run([ffprobe_path, "-i", filepath, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1"], capture_output=True, text=True)
-    if result.returncode != 0:
-        logger.error(f"[GET_DURATION] ffprobe error\n{result.stderr}")
-        return (False, result.returncode, "Unable to get duration from ffprobe result")
-    try:
-        _float = float(result.stdout)
-        return (True, _float, "") #Audio file
-    except ValueError:
-        if result.stdout == "N/A":
-            return (True, -1, "") #Audio stream / Radio
-        logger.error("[GET_DURATION] unable to get duration from ffprobe result")
-        return (False, -11, "Unable to get duration from ffprobe result")
-
+class AudioFileAttributes:
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+        self.is_local = True if os.path.isfile(self.file_path) else False
+        self.byte_size = os.path.getsize(self.file_path) if self.is_local else 0
+        result: subprocess.CompletedProcess = subprocess.run([_FFPROBE_PATH, "-i", self.file_path, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1"], capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"[AudioFileAttributes] ffprobe error\n{result.stderr}")
+            raise ValueError("ffprobe error\n{result.stderr}")
+        try:
+            _float = float(result.stdout) #Audio file
+            self.duration = _float
+        except ValueError:
+            if result.stdout == "N/A": #Audio stream / Radio
+                self.duration = -1
+            logger.error("[AudioFileAttributes] unable to get duration from ffprobe result")
+            raise ValueError("Unable to get duration from ffprobe result")

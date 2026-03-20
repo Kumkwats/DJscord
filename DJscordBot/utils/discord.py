@@ -99,8 +99,8 @@ class EmbedBuilder():
 
         progress_text = ""
         if queue_data.cursor == entry_index:
-            if entry.type == EntryType.LOCAL_FILE and entry.duration > 0:
-                progress_text = f"{cls.__create_progress_bar(time_elapsed, entry.duration, queue_data.is_paused)}\n\n"
+            if entry.duration > 0:
+                progress_text = f"{cls.__create_progress_bar(time_elapsed, entry.duration, queue_data.is_paused, yt_video_url=entry.yt_video_url)}\n\n"
             else:
                 progress_text = f"Durée d'écoute : {time_format(time_elapsed)} {'[Lecture suspendue]' if queue_data.is_paused else ''}\n\n"
 
@@ -132,10 +132,15 @@ class EmbedBuilder():
 
 
     @classmethod
-    def __create_progress_bar(cls, time_elapsed: float, duration: float, paused: bool = False):
+    def __create_progress_bar(cls, time_elapsed: float, duration: float, paused: bool = False, *, yt_video_url: str = ""):
         raw_progress: float = time_elapsed/duration # progress between 0 and 1
 
-        progress_text = f"Progression : {time_format(time_elapsed)}/{time_format(duration)} ({int(raw_progress*100)}%) {'[Lecture suspendue]' if paused else ''}"
+        if yt_video_url is not None or yt_video_url != "":
+            progress_text = f"Progression : [{time_format(time_elapsed)}]({yt_video_url}&t={int(time_elapsed)}s)/{time_format(duration)}"
+        else:
+            progress_text = f"Progression : {time_format(time_elapsed)}/{time_format(duration)}"
+        progress_text += f" ({int(raw_progress*100)}%) {'[Lecture suspendue]' if paused else ''}"
+
         stepped_progress = raw_progress*cls.progress_bar_size
         progress_bar_str = "["
         for i in range(0, cls.progress_bar_size):
