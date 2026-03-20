@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import StrEnum, auto
 from typing import Self
 
 from ...logging.utils import get_logger
@@ -12,12 +12,26 @@ _PROVIDER_ID: str = "spotify"
 _DEFAULT_URL: str = "https://open.spotify.com/"
 
 
-#region Identifier
 class SptType(StrEnum):
-    TRACK = "track"
-    ALBUM = "album"
-    PLAYLIST = "playlist"
-    ARTIST = "artist"
+    TRACK = auto()
+    ALBUM = auto()
+    PLAYLIST = auto()
+    ARTIST = auto()
+
+    @classmethod
+    def _missing_(cls, value: str):
+        value = value.lower()
+        for member in cls:
+            if member.value == value:
+                return member
+        return None
+
+class SptAlbumType(StrEnum):
+    ALBUM = auto()
+    EP = auto()
+    SINGLE = auto()
+    COMPILATION = auto()
+
 
     @classmethod
     def _missing_(cls, value: str):
@@ -28,10 +42,20 @@ class SptType(StrEnum):
         return None
 
 
+    def to_desc(self):
+        match self.value:
+            case SptAlbumType.EP:
+                return "EP"
+            case _:
+                return self.value.capitalize()
+
+
+
 @dataclass
 class SptCoverArt:
     cover_art: str
     color_hex: int
+
 
 
 @dataclass(frozen=True)
@@ -81,8 +105,6 @@ class SptIdentifier:
             return None
 
 
-#endregion
-
 
 
 @dataclass
@@ -101,3 +123,8 @@ class SptBase:
     @property
     def weburl(self):
         return f"{_DEFAULT_URL}/{self.identifier.type}/{self.identifier.id}"
+
+
+@dataclass
+class SptAlbumBase(SptBase):
+    a_type: SptAlbumType

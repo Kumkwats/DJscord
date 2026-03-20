@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from typing import Any
 
+
 from ..common import MediaBaseIdentifier, MediaEntry
 
-from ._core import SptIdentifier, _spt_logger, SptBase, SptCoverArt
+from ._core import SptAlbumType, SptIdentifier, _spt_logger, SptBase, SptAlbumBase, SptCoverArt
 from ._artist import SptArtistBase, parse_artists_info
 
 
@@ -17,7 +18,7 @@ class SptSongBase(SptBase):
 
 @dataclass
 class SptSongFull(SptSongBase):
-    album: SptBase              # we just need the name
+    album: SptAlbumBase       # we just need its name, its type
     album_art: SptCoverArt    # and its cover
     
     first_artists: list[SptArtistBase]
@@ -34,9 +35,10 @@ def process_track_data(raw_data: dict[str, Any]) -> SptSongFull | None:
         _spt_logger.error(f"Failed to parse media identifier: {ex}")
         return None
     name = sanitised_data['name']
-    album = SptBase(
+    album = SptAlbumBase(
         identifier=SptIdentifier.parse_str(sanitised_data['albumOfTrack']['uri']),
-        name=sanitised_data['albumOfTrack']['name'])
+        name=sanitised_data['albumOfTrack']['name'],
+        a_type=SptAlbumType(sanitised_data['albumOfTrack']['type'].lower()))
 
     duration: int = sanitised_data['duration']['totalMilliseconds']
     playcount:int = int(sanitised_data['playcount'])

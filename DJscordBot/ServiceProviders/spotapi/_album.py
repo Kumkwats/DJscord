@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import StrEnum, auto
 from typing import Any
 
-from ._core import SptIdentifier, _spt_logger, SptBase, SptCoverArt
+from ._core import SptIdentifier, _spt_logger, SptCoverArt, SptAlbumBase, SptAlbumType
 from ._track import SptSongBase
 from ._artist import SptArtistBase, parse_artists_info
 
@@ -10,29 +10,6 @@ from ._artist import SptArtistBase, parse_artists_info
 _ALBUM_KEYS = ['__typename', 'uri', 'name', 'label', 'tracksV2', 'type', 'discs', 'artists', 'date', 'coverArt', 'copyright', 'isPreRelease']
 
 
-
-class SptAlbumType(StrEnum):
-    ALBUM = auto()
-    EP = auto()
-    SINGLE = auto()
-    COMPILATION = auto()
-
-
-    @classmethod
-    def _missing_(cls, value: str):
-        value = value.lower()
-        for member in cls:
-            if member.value == value:
-                return member
-        return None
-
-
-    def to_desc(self):
-        match self.value:
-            case SptAlbumType.EP:
-                return "EP"
-            case _:
-                return self.value.capitalize()
 
 
 
@@ -51,8 +28,7 @@ class SptAlbumDisc():
         return len(self.tracks)
 
 @dataclass
-class SptAlbum(SptBase):
-    type: str
+class SptAlbum(SptAlbumBase):
     label: str
     discs: list[SptAlbumDisc]
     artists: list[SptArtistBase]
@@ -114,8 +90,8 @@ def process_album_data(raw_data: dict[str, Any]) -> SptAlbum | None:
     return SptAlbum(
         identifier=uri,
         name=name,
-        type=albumtype.to_desc(),
-        label=label,
+        a_type=albumtype.to_desc(),
+        alabel=label,
         discs=discs,
         artists=artists,
         visual_art=visual_art
