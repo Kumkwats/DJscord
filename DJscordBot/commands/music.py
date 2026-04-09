@@ -134,7 +134,7 @@ class Music():
         except discord.ClientException as cEx:
             logger.error(f"[VOICE.RECOVER.CLIENT] unable to connect to VC because it is already connected to a voice client... attempting move (GID:{queue.guild_id})'")
             try:
-                queue.move(author_voice_channel)
+                await queue.move(author_voice_channel)
             except asyncio.TimeoutError as toErr:
                 logger.error(f"[VOICE.RECOVER.MOVE.TIMEOUT] move timed out... (GID:{queue.guild_id})\n\tException: '{toErr}'")
                 return (False, "Discord ne m'a pas donné de réponse... veuillez réessayer ultérieurement")
