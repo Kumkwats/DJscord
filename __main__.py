@@ -210,7 +210,7 @@ if __name__ == "__main__":
 
     from DJscordBot.Types.enums import RepeatMode
     @queue.command(description="Choisir le mode de répétition")
-    async def repeat(ctx: Interaction, mode: RepeatMode = RepeatMode.NONE):
+    async def repeat(ctx: Interaction, mode: RepeatMode | None):
         await musicCog.repeat(InteractionWrapper(ctx), mode)
 
     bot.tree.add_command(queue)

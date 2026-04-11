@@ -595,10 +595,12 @@ class PlayCmdProcessor():
         except requests.Timeout as err:
             logger.error(f"[QUERY.PROCESS.LINK] Request as timed-out while attempting to gather HTTP Headers at : ({query})\n{traceback.print_exception(err, limit=PRINT_EXCEPTION_LIMIT)}")
             return await self.response_wrapper.whisper_to_author(":warning: Le site n'a pas pu donner une réponse à temps")
-        if query_request.headers["Content-Type"].startswith("audio"):
+        print(query_request.headers['Content-Type'])
+        if query_request.headers["Content-Type"].strip().startswith("audio"):
             return await self.__process_audio_content_url(query)
+        logger.info(f"[QUERY.PROCESS.LINK] Headers from the request at link \"{query}\" didn't match audio MIME type (GID:{self.response_wrapper.guild_id})")
 
-
+        logger.info(f"[QUERY.PROCESS.LINK] Attempting to use yt_dlp to download the file (GID:{self.response_wrapper.guild_id})")
         result: common.CommonResponseData = await youtube.YoutubeAPI.get_data_async(query, self.__retrieve_data_feedback)
         if result.data is not None or len(result.data) > 0: # Supported by yt_dlp
             return await self.__process_yt_dlp_supported(result, query)

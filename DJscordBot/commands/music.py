@@ -516,27 +516,17 @@ class Music():
             return await interac_wrapper.whisper_to_author("Aucune liste de lecture")
 
         repeat_text = {
-            RepeatMode.NO_REPEAT: "Pas de répétition",
+            RepeatMode.NONE: "Pas de répétition",
             RepeatMode.ENTRY: "Musique en cours",
-            RepeatMode.ALL: "Liste de lecture entière",
+            RepeatMode.QUEUE: "Liste de lecture entière",
             RepeatMode.PLAYLIST: "Playlist"
         }
 
         if mode is not None:
-            match mode:
-                case 'none':
-                    queue.repeat_mode = RepeatMode.NO_REPEAT
-                case 'entry':
-                    queue.repeat_mode = RepeatMode.ENTRY
-                case 'playlist':
-                    queue.repeat_mode = RepeatMode.PLAYLIST
-                case 'all':
-                    queue.repeat_mode = RepeatMode.ALL
-                case _:
-                    return await interac_wrapper.whisper_to_author(f":warning: `{mode}` n'est pas un mode de répétition existant")
+            queue.repeat_mode = mode
             return await interac_wrapper.respond(f"Le mode de répétition à été changé sur `{repeat_text[queue.repeat_mode]}`")
         else:
-            repeat_modes = [RepeatMode.NO_REPEAT, RepeatMode.ENTRY, RepeatMode.PLAYLIST, RepeatMode.ALL]
+            repeat_modes = [RepeatMode.NONE, RepeatMode.ENTRY, RepeatMode.PLAYLIST, RepeatMode.QUEUE]
             old_mode = queue.repeat_mode
             new_mode = repeat_modes[(repeat_modes.index(old_mode) + 1) % len(repeat_modes)]
             queue.repeat_mode = new_mode

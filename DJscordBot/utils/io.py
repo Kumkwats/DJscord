@@ -43,7 +43,6 @@ class AudioFileAttributes:
             _float = float(result.stdout) #Audio file
             self.duration = _float
         except ValueError:
-            print(result.stdout)
             if result.stdout.strip() == "N/A": #Audio stream / Radio
                 self.duration = -1
             else:
