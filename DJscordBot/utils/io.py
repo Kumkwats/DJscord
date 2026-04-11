@@ -43,7 +43,9 @@ class AudioFileAttributes:
             _float = float(result.stdout) #Audio file
             self.duration = _float
         except ValueError:
-            if result.stdout == "N/A": #Audio stream / Radio
+            print(result.stdout)
+            if result.stdout.strip() == "N/A": #Audio stream / Radio
                 self.duration = -1
-            logger.error("[AudioFileAttributes] unable to get duration from ffprobe result")
-            raise ValueError("Unable to get duration from ffprobe result")
+            else:
+                logger.error("[AudioFileAttributes] unable to get duration from ffprobe result")
+                raise ValueError("Unable to get duration from ffprobe result")
