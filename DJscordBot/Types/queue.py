@@ -347,7 +347,7 @@ class Queue():
                 self.cursor = i
 
             current_entry = self.entries[self.cursor]
-            if current_entry.playlist.id is not None:
+            if current_entry.playlist is not None:
                 if self.cursor < self.size-1:
                     if self.entries[self.cursor+1].playlist is not None:
                         if self.entries[self.cursor+1].playlist.id != current_entry.playlist.id:
