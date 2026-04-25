@@ -38,7 +38,7 @@ class AudioFileAttributes:
         result: subprocess.CompletedProcess = subprocess.run([_FFPROBE_PATH, "-i", self.file_path, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1"], capture_output=True, text=True)
         if result.returncode != 0:
             logger.error(f"[AudioFileAttributes] ffprobe error\n{result.stderr}")
-            raise ValueError("ffprobe error\n{result.stderr}")
+            raise ValueError(f"ffprobe error")
         try:
             _float = float(result.stdout) #Audio file
             self.duration = _float

@@ -1,12 +1,15 @@
 import asyncio
 import os
 import random
+from discord import file
 import requests
 import time
 import traceback
 import sys
 
 from threading import Lock
+
+from DJscordBot.utils.io import AudioFileAttributes
 
 if sys.version_info.minor <= 12:
     from typing_extensions import Self
@@ -399,9 +402,9 @@ class PlayCmdProcessor():
         #Download attempt
         try:
             #await self.response_wrapper.append_to_last_whisper(f"- Téléchargement de la video **{yt_video.name}**...", True)
-            await youtube.YoutubeAPI.download(yt_video)
+            result = await youtube.YoutubeAPI.download(yt_video)
             logger.info(f"[YOUTUBE.VIDEO.DOWNLOAD] Download success")
-            return True
+            return result
         except Exception as ex:
             logger.error(f"[YOUTUBE.VIDEO.DOWNLOAD.ERROR] unable to download {yt_video.name} | (GID:{self.response_wrapper.guild_id})\n\n{ex}")
             return False
@@ -588,35 +591,28 @@ class PlayCmdProcessor():
 
         logger.info(f"[QUERY.PROCESS.LINK] Begin process of link \"{query}\" (GID:{self.response_wrapper.guild_id})")
         try:
-            query_request = requests.head(query, timeout=REQUEST_HEAD_TIMEOUT)
-        except ConnectionError as err:
-            logger.error(f"[QUERY.PROCESS.LINK] A connection error occured while attempting to gather HTTP Headers at : ({query})\n{traceback.print_exception(err, limit=PRINT_EXCEPTION_LIMIT)}")
-            return await self.response_wrapper.whisper_to_author(":warning: Une erreur est survenue lors de la récupération des données de la requète")
-        except requests.Timeout as err:
-            logger.error(f"[QUERY.PROCESS.LINK] Request as timed-out while attempting to gather HTTP Headers at : ({query})\n{traceback.print_exception(err, limit=PRINT_EXCEPTION_LIMIT)}")
-            return await self.response_wrapper.whisper_to_author(":warning: Le site n'a pas pu donner une réponse à temps")
-        print(query_request.headers['Content-Type'])
-        if query_request.headers["Content-Type"].strip().startswith("audio"):
-            return await self.__process_audio_content_url(query)
-        logger.info(f"[QUERY.PROCESS.LINK] Headers from the request at link \"{query}\" didn't match audio MIME type (GID:{self.response_wrapper.guild_id})")
+            audio_remote_file_attributes = AudioFileAttributes(query)
+            return await self.__process_audio_content_attributes(audio_remote_file_attributes)
+        except ValueError as err: # Raised when the link can't be processed as an audio file by ffprobe
+            logger.error(f"[QUERY.PROCESS.LINK] Error occurred while creating AudioFileAttributes for link \"{query}\" (GID:{self.response_wrapper.guild_id})") #\n{traceback.print_exception(err, limit=PRINT_EXCEPTION_LIMIT)}
+            
+            logger.info(f"[QUERY.PROCESS.LINK] Attempting to use yt_dlp instead to download the file (GID:{self.response_wrapper.guild_id})")
+            result: common.CommonResponseData = await youtube.YoutubeAPI.get_data_async(query, self.__retrieve_data_feedback)
+            if result.data is not None or len(result.data) > 0: # Supported by yt_dlp
+                return await self.__process_yt_dlp_supported(result, query)
+            return await self.response_wrapper.whisper_to_author(":warning: Ce site n'est pas supporté ou ce lien ne contient pas de données audio")
+        
 
-        logger.info(f"[QUERY.PROCESS.LINK] Attempting to use yt_dlp to download the file (GID:{self.response_wrapper.guild_id})")
-        result: common.CommonResponseData = await youtube.YoutubeAPI.get_data_async(query, self.__retrieve_data_feedback)
-        if result.data is not None or len(result.data) > 0: # Supported by yt_dlp
-            return await self.__process_yt_dlp_supported(result, query)
-        return await self.response_wrapper.whisper_to_author(":warning: Ce site n'est pas supporté ou ce lien ne contient pas de données audio")
-
-
-    async def __process_audio_content_url(self, url: str):
-        new_entry = Entry(url, self.response_wrapper.author, url)
-        try:
-            new_entry.map_to_file(url)
-        except ValueError as err:
-            logger.error(f"error while mapping audio to entry\nError: {err}")
-            return (False, f":warning: Erreur lors de l'analyse de {new_entry.title}")
+    async def __process_audio_content_attributes(self, file_attributes: AudioFileAttributes):
+        new_entry = Entry(file_attributes.file_path, self.response_wrapper.author, file_attributes.file_path)
+        new_entry.map_to_file_from_attributes(file_attributes)
         queue: Queue = self.__get_queue_from_ctx()
         position = await queue.add_entry(new_entry)
-        return await self.response_wrapper.whisper_to_author(f"[{position}] **{new_entry.title}** a été ajouté à la file d'attente\n{self.__get_processing_time()}")
+        if file_attributes.duration < 0:
+            response = f"[{position}] Le stream **{new_entry.title}** a été ajouté à la file d'attente\n{self.__get_processing_time()}"
+        else:
+            response = f"[{position}] Le fichier distant **{new_entry.title}** a été ajouté à la file d'attente\n{self.__get_processing_time()}"
+        return await self.response_wrapper.whisper_to_author(response)
 
 
     async def __process_yt_dlp_supported(self, result: common.CommonResponseData, query: str):

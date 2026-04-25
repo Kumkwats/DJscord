@@ -102,6 +102,19 @@ class Entry:
         self.is_ready = True
         return True
 
+    def map_to_file_from_attributes(self, file_attributes: AudioFileAttributes) -> bool:
+        if file_attributes.is_local:
+            self.type = EntryType.LOCAL_FILE
+            self.file_path = file_attributes.file_path
+            self.filename = os.path.basename(file_attributes.file_path)
+        else:
+            self.type = EntryType.REMOTE
+            self.remote_url = file_attributes.file_path
+        self.duration = file_attributes.duration
+        self.size = file_attributes.byte_size
+        self.is_ready = True
+        return True
+
     # def map_to_file(self, filename: str, duration = 0, file_size = 0):
     #     self.type = EntryType.LOCAL_FILE
     #     self.filename = filename

@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import asyncio
 import traceback
@@ -381,41 +382,44 @@ class YoutubeAPI():
 
     #region Download
 
-    async def download(video: YoutubeVideo):
-        logger.info(f"[YOUTUBE.DOWNLOAD] Begin download for file {video.get_filename()} !")
-        print_in_console = True
-        frequency_update: float = 5 #how much time (in seconds) between prints in console
+    FREQUENCY_UPDATE: float = 5 #seconds
 
+    @classmethod
+    async def download(cls, video: YoutubeVideo) -> bool:
+        logger.info(f"[DOWNLOAD] Begin download for file {video.get_filename()} !")
+        return await cls._download(video.web_url, video.get_filename())
+
+    @classmethod
+    async def _download(cls, url: str, expected_filename: str, *, print_in_console: bool = True) -> bool:
         start_time: float = time.time()
         last_update_time: float = start_time #last time the process has been checked
-        time_since_last_update: float = frequency_update #used to calculate when to print
+        time_since_last_update: float = cls.FREQUENCY_UPDATE #used to calculate when to print
 
         if os.name == "nt": # 'nt' => Windows; Multiprocessing doesn't work similarly between Windows and Linux and causes problems that I don't want to deal with yet so I'm bringing back the old way for Windows
-            download_process: Thread = Thread(target=ydl_downloader.download, args=[video.web_url])
+            download_process: Thread = Thread(target=ydl_downloader.download, args=[url])
         else:
-            download_process: Process = Process(target=ydl_downloader.download, args=[video.web_url])
+            download_process: Process = Process(target=ydl_downloader.download, args=[url])
         download_process.start()
 
         while download_process.is_alive():
+
             delta_time = time.time() - last_update_time
             time_since_last_update += delta_time
             
             last_update_time = time.time()
 
-            if time_since_last_update > frequency_update:
-                time_since_last_update -= frequency_update
+            if time_since_last_update > cls.FREQUENCY_UPDATE:
+                time_since_last_update -= cls.FREQUENCY_UPDATE
                 if print_in_console:
-                    logger.info(f"[YOUTUBE.DOWNLOAD.RUN] Downloading video with id '{video.id}'... (Elapsed : {(time.time() - start_time):4.2f} seconds)")
+                    logger.info(f"[DOWNLOAD.RUN] Downloading video '{url}'... (Elapsed : {(time.time() - start_time):4.2f} seconds)")
             await asyncio.sleep(0.1)
 
         # Check if file has been correctly downloaded
-        if not os.path.isfile(config.downloadDirectory + video.get_filename()):
-            logger.error(f"[YOUTUBE.DOWNLOAD] Download finished but file is not found !")
+        if not os.path.isfile(config.downloadDirectory + expected_filename):
+            logger.error(f"[DOWNLOAD] Download finished but unable to find file {expected_filename}!")
             return False
-        logger.info(f"[YOUTUBE.DOWNLOAD] Download finished for file {video.get_filename()} !")
+        logger.info(f"[DOWNLOAD] Download finished for file {expected_filename} !")
         return True
-    
-    
 
     #endregion
 
@@ -434,40 +438,14 @@ class YoutubeAPI():
 
 
 #region OTHER STREAMS
-
-    async def link_download(link: str, raw_data):
+    @classmethod
+    async def link_download(cls, link: str, raw_data: dict) -> tuple[bool, str]:
         file_name = ydl_downloader.prepare_filename(raw_data)[len(config.downloadDirectory):]
         logger.info(f"[YOUTUBE.DOWNLOAD] Begin download for file {file_name} !")
-        print_in_console = True
-        frequency_update: float = 5 #how much time (in seconds) between prints in console
 
-        start_time: float = time.time()
-        last_update_time: float = start_time #last time the process has been checked
-        time_since_last_update: float = frequency_update #used to calculate when to print
+        result: bool = await cls._download(link, file_name)
+        return result, file_name
 
-        if os.name == "nt": # 'nt' => Windows; Multiprocessing doesn't work similarly between Windows and Linux and causes problems that I don't want to deal with yet so I'm bringing back the old way for Windows
-            download_process: Thread = Thread(target=ydl_downloader.download, args=[link])
-        else:
-            download_process: Process = Process(target=ydl_downloader.download, args=[link])
-        download_process.start()
 
-        while download_process.is_alive():
-            delta_time = time.time() - last_update_time
-            time_since_last_update += delta_time
-            
-            last_update_time = time.time()
-
-            if time_since_last_update > frequency_update:
-                time_since_last_update -= frequency_update
-                if print_in_console:
-                    logger.info(f"[YOUTUBE.DOWNLOAD.RUN] Downloading video with id '{raw_data['id']}'... (Elapsed : {(time.time() - start_time):4.2f} seconds)")
-            await asyncio.sleep(0.1)
-
-        # Check if file has been correctly downloaded
-        if not os.path.isfile(config.downloadDirectory + file_name):
-            logger.error(f"[YOUTUBE.DOWNLOAD] Download finished but file is not found !")
-            return False, ""
-        logger.info(f"[YOUTUBE.DOWNLOAD] Download finished for file {file_name} !")
-        return True, file_name
 
 #endregion
