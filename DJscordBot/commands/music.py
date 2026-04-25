@@ -288,7 +288,7 @@ class Music():
         total_duration = 0
         total_size = 0
         queue_list = ""
-        
+        entries_ellipsis = "⠀⠀⠀⠀…"
 
         #TODO add this to the config file
         print_size = 20
@@ -305,55 +305,68 @@ class Music():
             print_max = min(print_min + print_size, queue.size)
         
         if print_min == 0:
-            queue_list += "==== Début de la file\n"
+            queue_list += "━━━━━━ Début de la file ━━━━━━"
         else:
-            queue_list += "⠀⠀⠀⠀…\n"
+            queue_list += f"{entries_ellipsis}"
             
 
         current_playlist: EntryPlaylist = None
         for index in range(print_min, print_max):
+            queue_list += "\n"
+
             entry: Entry = queue.entries[index]
             #Line variables
             tab = ""
 
-            indicator = "\u2003\u2003"
+            play_indicator = "\u2003\u2003"
             if queue.cursor == index:
                 if queue.repeat_mode == RepeatMode.ENTRY:
-                    indicator = "\u2002\u2006⟳\u2002"
+                    play_indicator = "\u2002\u2006⟳\u2002"
                 else:
-                    indicator = "\u2003→\u2004"
+                    play_indicator = "\u2003→\u2004"
 
             title: str = entry.title
                 
             duration: int = 0
-            if hasattr(entry, 'duration'): duration = entry.duration
+            duration_str: str = None
+            if hasattr(entry, 'duration'):
+                duration = entry.duration
+                if entry.duration > 0:
+                    total_duration += duration
+            if duration < 0:
+                duration_str = "Live"
+            else:
+                duration_str = time_format(duration)
 
-            total_duration += duration
 
             file_size_str = ""
-            if hasattr(entry, 'size'): file_size_str = entry.size/1000000
+            if hasattr(entry, 'size'):
+                total_size += entry.size
+                file_size_str = entry.size/1000000
 
 
             if entry.playlist is not None:
-                tab = "⠀⠀⠀⠀"
+                tab = "\u2003\u2003"
                 if current_playlist is None or current_playlist.id != entry.playlist.id:
                     current_playlist = entry.playlist
                     if queue.repeat_mode == RepeatMode.PLAYLIST:
-                        queue_list += "⟳ ⠀"
+                        queue_list += "⟳\u2006\u2002"
                     else:
-                        queue_list += "⠀⠀ "
-                    queue_list += f" Playlist : {current_playlist.title}\n"
+                        queue_list += "\u2002\u2002\u2002"
+                    queue_list += f"Playlist: **{current_playlist.title}**\n"
 
-            queue_list += f"{tab}{indicator}{index}: {title} - {time_format(duration)}\n"
-
+            queue_list += f"{tab}{play_indicator}**{index}**: {title}"
+            if duration_str is not None:
+                queue_list += f" — {duration_str}"
             
-            # totalSize += entry.fileSize
+            
+            
 
 
         if print_max == queue.size:
-            queue_list += "==== Fin de la file"
+            queue_list += "\n━━━━━━ Fin de la file ━━━━━━"
         else:
-            queue_list += "⠀⠀⠀⠀…"
+            queue_list += f"\n{entries_ellipsis}"
         
         repeat_text = {
             RepeatMode.NONE: "Aucun",
@@ -366,8 +379,7 @@ class Music():
             description=queue_list,
             color=0x565493
         )
-        # | Taille totale : %.2fMo .... , totalSize/1000000
-        footerText = f"Nombre d'entrées : {queue.size} | Mode de répétition : {repeat_text[queue.repeat_mode]}\nDurée totale : {time_format(total_duration)} "
+        footerText = f"Mode de répétition : {repeat_text[queue.repeat_mode]}\nNombre d'entrées : {queue.size}\nDurée totale : {time_format(total_duration)} | Taille totale : {total_size/1000000:.2f}Mo"
         if page is not None:
             footerText += f"\nPage {page}/{((queue.size - 1) // print_size) + 1}"
 
