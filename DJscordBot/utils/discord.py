@@ -132,7 +132,7 @@ class EmbedBuilder():
 
 
     @classmethod
-    def __create_progress_bar(cls, time_elapsed: float, duration: float, paused: bool = False, *, yt_video_url: str = ""):
+    def __create_progress_bar(cls, time_elapsed: float, duration: float, paused: bool = False, *, yt_video_url: str = None):
         raw_progress: float = time_elapsed/duration # progress between 0 and 1
 
         if yt_video_url is not None or yt_video_url != "":
