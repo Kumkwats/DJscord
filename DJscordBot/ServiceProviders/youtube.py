@@ -1,3 +1,5 @@
+from asyncio.subprocess import Process
+from multiprocessing.connection import Connection
 import os
 import re
 import time
@@ -9,6 +11,7 @@ if os.name == "nt":
 else:
     from multiprocessing import Process, Pipe
     from multiprocessing.connection import Connection
+    from typing import Callable
 
 import yt_dlp
 #from youtubesearchpython.__future__ import VideosSearch
@@ -204,71 +207,124 @@ class YoutubeAPI():
         return CommonResponseData(PROVIDER, request_data['id'], request_data, cls.infer_type_from_request_url(youtube_url))
     
 
+    #region Data extraction ASYNC
 
     @classmethod
-    async def __extract_info_async(cls, query: str, extractor, user_update_coroutine = None, frequency_update: float = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> CommonResponseData:
+    async def _extract_info_async_wrapper(cls, query: str, user_update_coroutine = None, frequency_update: float = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> CommonResponseData:
+        is_search: bool = False
+        if query.startswith("ytsearch:"):
+            is_search = True
 
         start_time: float = time.time()
         last_update_time: float = time.time()
-        time_since_last_update: float = frequency_update 
+        time_since_last_update: float = frequency_update
 
-        if os.name == "nt": # 'nt' => Windows; Multiprocessing doesn't work similarly between Windows and Linux and causes problems that I don't want to deal with yet so I'm bringing back the old way for Windows
-            response_data: CommonResponseData = CommonResponseData.create_empty()
-            extract_thread: Thread = Thread(target=extractor, args=[query, response_data])
-        else:
-            receiver, sender = Pipe(False)
-            extract_thread: Process = Process(target=extractor, args=[query, sender])
-        extract_thread.start()
+        #TODO: finish refactoring. Reimplement Windows version of extractor.
+        return await cls.__extract_info_async(query, user_update_coroutine, frequency_update, print_in_console)
 
-        while extract_thread.is_alive():
-            delta_time = time.time() - last_update_time
-            last_update_time = time.time()
-            time_since_last_update += delta_time
+    if os.name != "nt":
+    #region POSIX
+        @classmethod
+        def _data_extrator(cls, query: str, pipe_sender: Connection, is_search: bool = False) -> None:
+            raw_data = ydl_extractor.extract_info(query, download=False)
+            if cls.validate_basic_raw_data(raw_data):
+                pipe_sender.send(CommonResponseData(PROVIDER, raw_data['id'], raw_data, cls.infer_type_from_request_url(query) if not is_search else 'search'))
+            else:
+                pipe_sender.send(None)
+            pipe_sender.close()
 
-            if os.name != "nt":
+        @classmethod
+        async def __extract_info_async(cls, query: str, user_update_coroutine = None, frequency_update: float = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> CommonResponseData:
+            is_search: bool = False
+            if query.startswith("ytsearch:"):
+                is_search = True
+
+            start_time: float = time.time()
+            last_update_time: float = time.time()
+            time_since_last_update: float = frequency_update 
+
+            if os.name == "nt": # 'nt' => Windows; Multiprocessing doesn't work similarly between Windows and Linux and causes problems that I don't want to deal with yet so I'm bringing back the old way for Windows
+                response_data: CommonResponseData = CommonResponseData.create_empty()
+                extract_thread: Thread = Thread(target=cls._data_extrator_UNIX, args=[query, response_data])
+            else:
+                receiver, sender = Pipe(False)
+                extract_thread: Process = Process(target=cls._data_extrator_UNIX, args=[query, sender, is_search])
+                extract_thread.start()
+
+            while extract_thread.is_alive():
+                delta_time = time.time() - last_update_time
+                last_update_time = time.time()
+                time_since_last_update += delta_time
+
                 if receiver.poll(0.1):
                     break
-            
-            if time_since_last_update > frequency_update:
-                time_since_last_update -= frequency_update
-                if print_in_console:
-                    logger.info(f"[YOUTUBE.DATA.GET] awaiting response...\ttime elapsed:{(time.time() - start_time):4.2f}")
-                if user_update_coroutine is not None:
-                    time_elapsed = time.time() - start_time
-                    await user_update_coroutine(time_elapsed)
-            await asyncio.sleep(0.15)
+                
+                if time_since_last_update > frequency_update:
+                    time_since_last_update -= frequency_update
+                    if print_in_console:
+                        logger.info(f"[YOUTUBE.DATA.GET] awaiting response...\ttime elapsed:{(time.time() - start_time):4.2f}")
+                    if user_update_coroutine is not None:
+                        time_elapsed = time.time() - start_time
+                        await user_update_coroutine(time_elapsed)
 
-        if os.name != "nt":
+                if receiver.poll(0.15):
+                    break
+
             response_data: CommonResponseData = receiver.recv()
             receiver.close()
 
-        return response_data
+            extract_thread.terminate()
 
-        
+            return response_data
+    #endregion
+    else:
+    #region Windows
+        @classmethod
+        def _data_extrator(cls, query: str, pipe_sender: Connection, is_search: bool = False) -> None:
+            raw_data = ydl_extractor.extract_info(query, download=False)
+            if cls.validate_basic_raw_data(raw_data):
+                pipe_sender.send(CommonResponseData(PROVIDER, raw_data['id'], raw_data, cls.infer_type_from_request_url(query) if not is_search else 'search'))
+            else:
+                pipe_sender.send(None)
+            pipe_sender.close()
 
+        @classmethod
+        async def __extract_info_async(cls, query: str, user_update_coroutine = None, frequency_update: float = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> CommonResponseData:
+            is_search: bool = False
+            if query.startswith("ytsearch:"):
+                is_search = True
 
+            start_time: float = time.time()
+            last_update_time: float = time.time()
+            time_since_last_update: float = frequency_update 
 
+            response_data: CommonResponseData = CommonResponseData.create_empty()
+            extract_thread: Thread = Thread(target=cls._data_extrator_UNIX, args=[query, response_data])
+
+            while extract_thread.is_alive():
+                delta_time = time.time() - last_update_time
+                last_update_time = time.time()
+                time_since_last_update += delta_time
+
+                
+                if time_since_last_update > frequency_update:
+                    time_since_last_update -= frequency_update
+                    if print_in_console:
+                        logger.info(f"[YOUTUBE.DATA.GET] awaiting response...\ttime elapsed:{(time.time() - start_time):4.2f}")
+                    if user_update_coroutine is not None:
+                        time_elapsed = time.time() - start_time
+                        await user_update_coroutine(time_elapsed)
+
+                await asyncio.sleep(0.25)
+
+            return response_data
+    #endregion
+
+    
 
     @classmethod
     async def search_async(cls, query: str, user_update_coroutine = None, frequency_update: int = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> YoutubeSearch:
-        if os.name == "nt":
-            def search_extract_coro(query, returned_response_data: CommonResponseData):
-                raw_data = ydl_extractor.extract_info(query, download=False)
-                if cls.validate_basic_raw_data(raw_data):
-                    returned_response_data.apply_values(CommonResponseData(PROVIDER, raw_data['id'], raw_data, 'search'))
-                else:
-                    returned_response_data = None
-        else:
-            def search_extract_coro(query: str, pipe_sender: Connection):
-                raw_data = ydl_extractor.extract_info(query, download=False)
-                if cls.validate_basic_raw_data(raw_data):
-                    pipe_sender.send(CommonResponseData(PROVIDER, raw_data['id'], raw_data, 'search'))
-                else:
-                    pipe_sender.send(None)
-                pipe_sender.close()
-
-
-        request_data = await cls.__extract_info_async(f"ytsearch:{query}", search_extract_coro, user_update_coroutine, frequency_update, print_in_console)
+        request_data = await cls.__extract_info_async(f"ytsearch:{query}", user_update_coroutine, frequency_update, print_in_console)
         if request_data is None or request_data.is_empty_or_incomplete:
             return None
         logger.info(f"Retrieved info from search : {request_data}")
@@ -277,25 +333,7 @@ class YoutubeAPI():
 
     @classmethod
     async def get_data_async(cls, youtube_link: str, user_update_coroutine = None, frequency_update: float = DEFAULT_ASYNC_UPDATE_FREQ, print_in_console: bool = False) -> CommonResponseData:
-        #extractor
-        if os.name == "nt":
-            def data_extract_coro(query, response_data: CommonResponseData):
-                raw_data = ydl_extractor.extract_info(query, download=False)
-                if cls.validate_basic_raw_data(raw_data):
-                    response_data.apply_values(CommonResponseData(PROVIDER, raw_data['id'], raw_data, cls.infer_type_from_request_url(query)))
-                else:
-                    response_data = None
-        else:
-            def data_extract_coro(query: str, pipe_sender: Connection):
-                raw_data = ydl_extractor.extract_info(query, download=False)
-                if cls.validate_basic_raw_data(raw_data):
-                    pipe_sender.send(CommonResponseData(PROVIDER, raw_data['id'], raw_data, cls.infer_type_from_request_url(query)))
-                else:
-                    pipe_sender.send(None)
-                pipe_sender.close()
-
-
-        return await cls.__extract_info_async(youtube_link, data_extract_coro, user_update_coroutine, frequency_update, print_in_console)
+        return await cls.__extract_info_async(youtube_link, user_update_coroutine, frequency_update, print_in_console)
 
 
 
@@ -390,16 +428,15 @@ class YoutubeAPI():
         return await cls._download(video.web_url, video.get_filename())
 
     @classmethod
-    async def _download(cls, url: str, expected_filename: str, *, print_in_console: bool = True) -> bool:
+    async def _download(cls, url: str, expected_filename: str, print_in_console: bool = True) -> bool:
         start_time: float = time.time()
         last_update_time: float = start_time #last time the process has been checked
         time_since_last_update: float = cls.FREQUENCY_UPDATE #used to calculate when to print
 
-        if os.name == "nt": # 'nt' => Windows; Multiprocessing doesn't work similarly between Windows and Linux and causes problems that I don't want to deal with yet so I'm bringing back the old way for Windows
-            download_process: Thread = Thread(target=ydl_downloader.download, args=[url])
+        if os.name == "nt":
+            download_process: Thread = await cls._start_dl_process(url)
         else:
-            download_process: Process = Process(target=ydl_downloader.download, args=[url])
-        download_process.start()
+            download_process: Process = await cls._start_dl_process(url)
 
         while download_process.is_alive():
 
@@ -420,6 +457,23 @@ class YoutubeAPI():
             return False
         logger.info(f"[DOWNLOAD] Download finished for file {expected_filename} !")
         return True
+
+    if os.name != "nt":
+    #region POSIX
+        @classmethod
+        async def _start_dl_process(cls, url: str) -> Process:
+            download_process: Process = Process(target=ydl_downloader.download, args=[url])
+            download_process.start()
+            return download_process
+    #endregion
+    else:
+    #region Windows
+    # Multiprocessing doesn't work similarly between Windows and Linux and causes problems. Mainly because inside the yt_dlp downloader some objects can't be pickled.
+        @classmethod
+        async def _start_dl_process(cls, url: str) -> Thread:
+            return Thread(target=ydl_downloader.download, args=[url])
+    #endregion
+
 
     #endregion
 
