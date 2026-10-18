@@ -4,7 +4,7 @@
 import discord
 
 from ..client import DJscordClient
-from ..utils.discord import InteractionWrapper
+from ..utils.discord.wrapper import InteractionWrapper
 
 
 class Manage():

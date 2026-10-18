@@ -1,6 +1,7 @@
 
 """Entry point of the bot
 """
+import asyncio
 from logging import warning
 import os
 import platform
@@ -16,7 +17,7 @@ from DJscordBot.client import DJscordClient
 from DJscordBot.config import config
 
 from DJscordBot.logging.utils import get_logger
-from DJscordBot.utils.discord import InteractionWrapper
+from DJscordBot.utils.discord.wrapper import InteractionWrapper
 
 from DJscordBot.commands.music import Music
 from DJscordBot.commands.manage import Manage
@@ -73,6 +74,9 @@ if __name__ == "__main__":
     async def on_connect():
         logger.info("[CONNECT] Established connection with Discord")
         logger.debug("[CONNECT.SYNC] Syncing app commands with Discord")
+        if config.test_guild is not None:
+            await bot.tree.sync(guild=discord.Object(config.test_guild))
+            await asyncio.sleep(5)
         await bot.tree.sync()
         logger.debug("[CONNECT.SYNC] Finished Syncing app commands with Discord")
         pass
@@ -81,13 +85,6 @@ if __name__ == "__main__":
     async def on_disconnect():
         logger.info("[CONNECT] Disconnected from Discord")
         pass
-
-    # @bot.event
-    # async def on_error(event: str, *args, **kwargs):
-    #     print(f"[BOT.ERROR] An error happened on the event {event}\n" + 
-    #           f"\t args: {args}"+
-    #           f"\t kwargs: {kwargs}")
-    #     pass
 
     @bot.event
     async def on_resumed():
@@ -256,5 +253,15 @@ if __name__ == "__main__":
     # print("[BOT.COG] Added Debug Cog")
     # bot.add_cog(Debug(bot))
     # print("[BOT.RUN] Running the bot")
+
+    # Test function with a somewhat basic hot reload functionality
+    if config.test_guild is not None:
+        from importlib import reload
+        import DJscordBot.test.func
+        @bot.tree.command(description="fonction test", guild=discord.Object(config.test_guild))
+        async def test(ctx: Interaction):
+            reload(DJscordBot.test.func)
+            await DJscordBot.test.func.TEST_FUNC(ctx)
+
 
     bot.run(config.token)

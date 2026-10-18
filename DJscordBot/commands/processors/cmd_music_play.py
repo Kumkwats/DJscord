@@ -26,7 +26,7 @@ from ...Types.queue import Queue
 from ...Types.enums import PlayQueryType
 from ...Types.entry import Entry, EntryPlaylist
 from ...Managers.queueManager import QueueManager
-from ...utils.discord import InteractionWrapper
+from ...utils.discord.wrapper import InteractionWrapper
 
 from ...logging.utils import get_logger
 logger = get_logger("djscordbot.music.play_processor")

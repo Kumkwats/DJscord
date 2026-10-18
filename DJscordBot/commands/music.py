@@ -8,7 +8,8 @@ from discord.ext import tasks
 
 from ..config import config
 from ..client import DJscordClient
-from ..utils.discord import InteractionWrapper, EmbedBuilder
+from ..utils.discord.wrapper import InteractionWrapper
+from ..utils.discord.embed import EmbedBuilder
 from ..Types.entry import Entry, EntryPlaylist
 from ..Types.queue import Queue
 from ..Types.enums import AfterEntryPlaybackAction, RepeatMode

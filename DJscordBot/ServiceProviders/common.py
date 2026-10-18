@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Self
 
-from DJscordBot.utils.discord import InteractionWrapper
+from DJscordBot.utils.discord.wrapper import InteractionWrapper
 
 from ..Types.entry import Entry
 

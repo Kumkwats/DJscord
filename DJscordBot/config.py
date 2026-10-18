@@ -124,7 +124,14 @@ class Config():
             self.debug = True
             logger.warning("[DEBUG] Debug flag activated ! This may create quite some additional files at run time")
 
-
+    # Test
+        self.test_guild: int = None
+        if 'TEST_GUILD' in config_dict:
+            try:
+                self.test_guild = int(config_dict['TEST_GUILD'])
+            except ValueError:
+                logger.error("[TEST] Invalid testing guild id")
+                self.test_guild = None
 
     @classmethod
     def get_prefix(self):
