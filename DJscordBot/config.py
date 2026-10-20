@@ -1,9 +1,119 @@
 import os
+
+from dataclasses import dataclass
+from inspect import get_annotations
+from typing import Any
+
 import dotenv
 import json
 
+
+
 from .logging.utils import get_logger
 logger = get_logger("djscordbot.config")
+
+
+CONFIG_FOLDER_PATH = "resources/"
+
+@dataclass(slots=True)
+class GuildSettings:
+    # server_language: str # unused until localised feedback is implemented
+    audio_player_update_in_channel_id: int = None # Where the bot should write their update messages
+    # afk_leave_timeout: int = 15 # <= 0 or null for no AFK timeout
+
+    @classmethod
+    def _from_json(cls, json_dict: dict[str, Any]):
+        extractable_values: dict[str,Any] = {k:v for k,v in json_dict.items() if k in GuildSettings.__slots__}
+
+        if not len(extractable_values):
+            return None
+
+        annotations = {k:v for k,v in get_annotations(cls) if k in extractable_values.keys()} # get the default type of the class variables
+        
+        guild_settings = GuildSettings()
+        for key in extractable_values.keys():
+            try:
+                setattr(guild_settings, key, GuildSettings.__parse_values(key, extractable_values[key], annotations[key]))
+            except:
+                logger.error(f"[GUILD.JSON] Unable to parse value for key {key}. Raw value is {extractable_values[key]}")
+
+
+    def _to_dict(self):
+        ret_dict = {}
+        for k in self.__slots__:
+            ret_dict[k] = getattr(self, k)
+        return ret_dict
+
+    def __parse_values(key: str, value: Any, target_type: type):
+        if value is None: # handling null values
+            return None
+        if target_type == str and isinstance(value, target_type):
+            return value
+        simple_types = [int, float, bool]
+        if target_type in simple_types:
+            if isinstance(value, target_type):
+                return value
+            try:
+                return target_type(value)
+            except ValueError:
+                raise ValueError("Unable to parse to targeted number or bool")
+        complex_types = [list, dict]
+        if target_type in complex_types:
+            if isinstance(value, target_type):
+                return value
+            raise ValueError("Unable to parse to targeted collection")
+        
+
+
+
+
+class GuildConfig:
+    config_file_path = CONFIG_FOLDER_PATH + "config_guilds.json"
+    _cached_configs: dict[int, GuildSettings] = None
+
+    @classmethod
+    def _load_config(cls) -> int: # returns the number of configs
+        logger.info("[GUILDS.LOAD] Loading guild configs from disk...")
+        
+        cls._cached_configs = {}
+
+        if os.path.isfile(cls.config_file_path):
+            f = open(cls.config_file_path, 'r')
+            loaded_configs: dict[str, Any] = json.load(f)
+            f.close()
+
+            for key in loaded_configs.keys():
+                try:
+                    guild_id = int(key)
+                except ValueError:
+                    logger.warning(f"[GUILDS.LOAD] key '({key})' is not a parseable id")
+                cls._cached_configs[guild_id] = GuildSettings._from_json(loaded_configs[guild_id])
+        logger.info("[GUILDS.LOAD] Loading guild configs from disk completed")
+        return len(cls._cached_configs)
+
+
+    @classmethod
+    def _save_config(cls):
+        logger.info("[GUILDS.SAVE] Saving guild configs to disk...")
+        json_dict = {}
+        for guild_id in cls._cached_configs:
+            json_dict[str(guild_id)] = cls._cached_configs[guild_id]._to_dict() # everything that isn't an id will not be preserved
+        f = open(cls.config_file_path, 'w')
+        json.dump(json_dict, f)
+        f.close()
+        logger.info("[GUILDS.SAVE] Saving guild configs to disk completed")
+    
+    @classmethod
+    def get_settings(cls, guild_id: int) -> GuildSettings:
+        if cls._cached_configs is None:
+            cls._load_config()
+        if guild_id not in cls._cached_configs:
+            logger.info(f"[GUILDS.GET] Creating default settings for guild [{guild_id}]")
+            cls._cached_configs[guild_id] = GuildSettings()
+        return cls._cached_configs[guild_id]
+
+
+
 
 CFGFILE: str = "resources/config.json"
 
